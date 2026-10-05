@@ -1,5 +1,26 @@
-# Vercel reads this when it builds: the FastAPI app, and the Vercel Queues subscribers (api/workers.py),
-# which become private functions. Python packages are in requirements.txt.
+# Vercel reads this when it builds (with uv): the packages, the FastAPI app, and the Vercel Queues subscribers
+# (api/workers.py), which become private functions. requirements.txt is the same list plus pytest, for the local venv.
+
+[project]
+name = "kvarn"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pymupdf",
+    "pillow",
+    "pillow-heif",
+    "markitdown[docx,xlsx,pptx]",
+    "anthropic",
+    "fastapi",
+    "psycopg[binary]",
+    "psycopg_pool",
+    "uvicorn",
+    "openai",
+    "openpyxl",
+    "pyjwt[crypto]",
+    "httpx",
+    "vercel-queue",
+]
 
 [tool.vercel]
 entrypoint = "api.main:app"

@@ -1,3 +1,4 @@
+# Same packages as pyproject.toml (which Vercel uses), plus pytest for the tests
 pymupdf
 pillow
 pillow-heif
