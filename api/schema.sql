@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS llm_cache (
     PRIMARY KEY (user_id, key)
 );
 
+-- AI spending per owner and month, checked against the budget in limits.py
+CREATE TABLE IF NOT EXISTS usage (
+    user_id TEXT NOT NULL,
+    month TEXT NOT NULL,  -- 2026-10
+    usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+    tokens_in BIGINT NOT NULL DEFAULT 0,
+    tokens_out BIGINT NOT NULL DEFAULT 0,
+    model_pages INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, month)
+);
+
 CREATE INDEX IF NOT EXISTS folders_user ON folders (user_id);
 CREATE INDEX IF NOT EXISTS documents_folder ON documents (folder_id);
 CREATE INDEX IF NOT EXISTS extractions_user ON extractions (user_id);
@@ -67,3 +78,4 @@ ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE extractions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE llm_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usage ENABLE ROW LEVEL SECURITY;

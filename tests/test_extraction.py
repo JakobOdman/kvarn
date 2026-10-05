@@ -126,8 +126,8 @@ def test_no_cache_and_no_paid_call_is_not_cached():
 def test_a_paid_answer_is_saved_and_used_again(monkeypatch):
     monkeypatch.setenv("READ_DOCUMENT_PAID", "1")
     client = RealLooking()
-    first = llm.ask("p", SCHEMA, db.Cache("anna"), client=client, paid=True)
-    again = llm.ask("p", SCHEMA, db.Cache("anna"), client=client, paid=True)
+    first = llm.ask("p", SCHEMA, db.Cache("anna"), db.Meter("anna"), client=client, paid=True)
+    again = llm.ask("p", SCHEMA, db.Cache("anna"), db.Meter("anna"), client=client, paid=True)
     assert client.calls == 1
     assert first == ({"bolag": "Alfa AB"}, {"tokens_in": 900, "tokens_out": 40, "cached": False})
     assert again == ({"bolag": "Alfa AB"}, {"tokens_in": 900, "tokens_out": 40, "cached": True})

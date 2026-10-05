@@ -20,7 +20,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool
 
-from api import storage
+from api import limits, storage
 
 LOCAL_DATABASE = "postgresql://postgres@localhost:5433/kvarn"  # started with pg_ctl, see context
 
@@ -77,6 +77,36 @@ class Cache:
                         "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
                         (self.user_id, key, saved["model"], saved["tokens_in"], saved["tokens_out"],
                          Jsonb(saved["answer"]), _now()))
+
+
+class Meter:
+    """The owner's AI spending this month, in the table usage: remaining() and add(usd, ...). See limits.py."""
+
+    def __init__(self, user_id: str):
+        self.user_id = user_id
+
+    def spent(self) -> float:
+        with connect() as con:
+            row = con.execute("SELECT usd FROM usage WHERE user_id = %s AND month = %s",
+                              (self.user_id, _month())).fetchone()
+        return row["usd"] if row else 0.0
+
+    def remaining(self) -> float:
+        return limits.MONTHLY_USD - self.spent()
+
+    def add(self, usd: float, tokens_in: int = 0, tokens_out: int = 0, model_pages: int = 0):
+        with connect() as con:
+            con.execute("""
+                INSERT INTO usage (user_id, month, usd, tokens_in, tokens_out, model_pages)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, month) DO UPDATE SET usd = usage.usd + excluded.usd,
+                    tokens_in = usage.tokens_in + excluded.tokens_in, tokens_out = usage.tokens_out + excluded.tokens_out,
+                    model_pages = usage.model_pages + excluded.model_pages""",
+                        (self.user_id, _month(), usd, tokens_in, tokens_out, model_pages))
+
+
+def _month() -> str:
+    return datetime.now().strftime("%Y-%m")
 
 
 # --- Folders ---

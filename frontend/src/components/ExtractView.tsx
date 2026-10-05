@@ -8,7 +8,7 @@ import {
   listFolders,
   listJobs,
   listTemplates,
-  paidAllowed,
+  getConfig,
   type Extraction,
   type ExtractionSummary,
   type Folder,
@@ -29,6 +29,7 @@ export function ExtractView() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [paid, setPaid] = useState(false)
+  const [spending, setSpending] = useState<{ spent: number; budget: number } | null>(null)
   const [templateId, setTemplateId] = useState('')
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [extractionId, setExtractionId] = useState<string | null>(null)
@@ -46,7 +47,10 @@ export function ExtractView() {
       setFolders(f)
       if (f.length) setFolderId((id) => id || f[0].id)
     })
-    paidAllowed().then(setPaid)
+    getConfig().then((c) => {
+      setPaid(c.paid)
+      setSpending(c)
+    })
     listExtractions().then(setHistory)
   }, [])
 
@@ -82,6 +86,7 @@ export function ExtractView() {
       }
       setExtraction(e)
       setHistory(await listExtractions())
+      setSpending(await getConfig())
       setCollapsed(true)
     } catch (e) {
       setError((e as Error).message)
@@ -166,6 +171,11 @@ export function ExtractView() {
               ? 'Kör använder bara sparade svar. Kör (betalt) skickar resten till AI:n.'
               : 'Utvecklingsläge: sparade svar eller tomt testsvar. Inget skickas till AI:n.'}
           </p>
+          {paid && spending && (
+            <p className="engine-note">
+              AI denna månad: {spending.spent.toFixed(2)} av {spending.budget.toFixed(0)} USD
+            </p>
+          )}
           {error && <p className="read-warning">{error}</p>}
 
           {extraction && (

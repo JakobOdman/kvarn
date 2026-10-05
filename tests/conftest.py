@@ -27,7 +27,7 @@ TEMPLATE = {"name": "Innehav", "prompt": "Hitta bolagen.",
 
 API = "http://testserver/api"  # the clients' base: client.get("/folders") is /api/folders
 PG_BIN = Path(os.environ.get("PG_BIN", "/Library/PostgreSQL/15/bin"))
-TABLES = "folders, documents, extractions, templates, llm_cache"
+TABLES = "folders, documents, extractions, templates, llm_cache, usage"
 KEY = ec.generate_private_key(ec.SECP256R1())  # stands in for Supabase's signing key
 
 

@@ -8,6 +8,8 @@ import hashlib
 import json
 import os
 
+from api import limits
+
 AZURE_ENDPOINT = "https://OdmanFoundry.services.ai.azure.com/openai/v1"
 MODEL = "gpt-5.4"
 
@@ -50,8 +52,11 @@ class AzureClient:
             model=model,
             input=[{"role": "user", "content": prompt}],
             text={"format": {"type": "json_schema", "name": "svar", "schema": schema, "strict": True}},
+            max_output_tokens=limits.MAX_TOKENS_OUT,
             **extra,
         )
+        if answer.status == "incomplete":
+            raise ValueError(f"Svaret blev längre än {limits.MAX_TOKENS_OUT:,} tokens och avbröts.".replace(",", " "))
         return json.loads(answer.output_text), answer.usage.input_tokens, answer.usage.output_tokens
 
 
@@ -68,12 +73,16 @@ def cache_key(prompt: str, schema: dict, model: str) -> str:
     return h.hexdigest()
 
 
-def ask(prompt: str, schema: dict, cache, model: str = MODEL, client=None, paid: bool = False) -> tuple[dict, dict]:
+def ask(prompt: str, schema: dict, cache, meter=None, model: str = MODEL, client=None,
+        paid: bool = False) -> tuple[dict, dict]:
     """(answer, usage) from the cache, or from the client if paid is True. NotCached if neither.
     cache has get(key) -> saved or None, and put(key, saved); saved = {"model", "tokens_in", "tokens_out", "answer"}.
+    meter has remaining() -> USD left this month, and add(usd, tokens_in, tokens_out) (db.Meter).
     usage = {"tokens_in", "tokens_out", "cached"}: the tokens of the call, also when the answer came from the cache.
 
     A FakeClient is always allowed. A real client needs paid=True and READ_DOCUMENT_PAID=1.
+    A cached answer is always free. Before a new call: TooLarge for a document over limits.MAX_TOKENS_IN, and
+    QuotaExceeded if the month's budget does not cover the call's worst case (full answer length).
     """
     key = cache_key(prompt, schema, model)
     if saved := cache.get(key):
@@ -82,11 +91,22 @@ def ask(prompt: str, schema: dict, cache, model: str = MODEL, client=None, paid:
     if client is None or (not isinstance(client, FakeClient) and not (paid and paid_allowed())):
         raise NotCached("No cached answer and no paid call allowed.")
 
+    estimate = limits.estimate_tokens(prompt)
+    if estimate > limits.MAX_TOKENS_IN:
+        raise limits.TooLarge(f"Dokumentet är för stort för en körning: cirka {estimate:,} tokens, högst "
+                              f"{limits.MAX_TOKENS_IN:,}.".replace(",", " "))
+    if not isinstance(client, FakeClient):
+        worst = limits.cost(model, estimate, limits.MAX_TOKENS_OUT)
+        if meter is None or meter.remaining() < worst:
+            raise limits.QuotaExceeded(f"Månadens AI-budget räcker inte ({limits.MONTHLY_USD:.0f} USD per månad). "
+                                       "Sparade svar fungerar fortfarande.")
+
     answer, tokens_in, tokens_out = client.send(prompt, schema, model)
     usage = {"tokens_in": tokens_in, "tokens_out": tokens_out, "cached": False}
     if isinstance(client, FakeClient):
         return answer, usage  # fake answers are never cached
 
     print(f"{model}: {tokens_in} tokens in, {tokens_out} out")
+    meter.add(limits.cost(model, tokens_in, tokens_out), tokens_in=tokens_in, tokens_out=tokens_out)
     cache.put(key, {"model": model, "tokens_in": tokens_in, "tokens_out": tokens_out, "answer": answer})
     return answer, usage

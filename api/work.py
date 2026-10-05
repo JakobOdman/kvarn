@@ -6,7 +6,7 @@ Started through jobs.py: Vercel Queues in production, a thread locally. A job ma
 """
 from dataclasses import asdict
 
-from api import db, llm, storage
+from api import db, limits, llm, storage
 from api.extract import extract_document
 from api.templates import Template
 from read_document import read_document
@@ -26,13 +26,24 @@ def read_job(payload: dict, attempt: int = 1):
         return
     opts = doc["options"]
     db.update_document(job_id, "running")
+    # AI reading only in paid mode, and only as many pages as the limit and the month's budget allow
+    meter = db.Meter(doc["user_id"])
+    allow_model = opts["allow_model"] and llm.paid_allowed()
+    max_pages = None
+    if allow_model:
+        max_pages = min(opts["max_model_pages"] or limits.MAX_MODEL_PAGES, limits.MAX_MODEL_PAGES,
+                        int(meter.remaining() // limits.PAGE_USD))
+        allow_model = max_pages > 0
     try:
-        out = read_document(storage.read(doc["user_id"], doc["sha256"]), doc["name"], allow_model=opts["allow_model"],
-                            max_model_pages=opts["max_model_pages"], model=opts["model"])
+        out = read_document(storage.read(doc["user_id"], doc["sha256"]), doc["name"], allow_model=allow_model,
+                            max_model_pages=max_pages if allow_model else None, model=opts["model"])
         result = asdict(out)
         if not opts["words"]:
             for p in result["pages"]:
                 p.pop("words", None)
+        model_pages = sum(p["reader"] == "claude_vision" for p in result["pages"])
+        if model_pages:
+            meter.add(model_pages * limits.PAGE_USD, model_pages=model_pages)
         db.update_document(job_id, "done", result=result)
     except Exception as e:  # noqa: BLE001 - one bad file must not take the server down
         db.update_document(job_id, "error", error=str(e))
@@ -57,7 +68,7 @@ def extract_job(payload: dict, attempt: int = 1):
         if job is None or job["status"] != "done":
             raise ValueError("Dokumentet är inte läst.")
         rows, usage = extract_document(job["name"], job["result"], template, db.Cache(extraction["user_id"]),
-                                       client=client, paid=payload["paid"])
+                                       db.Meter(extraction["user_id"]), client=client, paid=payload["paid"])
         changes = usage | {"status": "done"}
     except llm.NotCached:
         changes = {"status": "error", "error": "Inget sparat svar. Kör betalt för att skicka till AI:n."}

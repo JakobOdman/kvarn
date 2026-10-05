@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from openpyxl import Workbook
 from pydantic import BaseModel, Field
 
-from api import db, jobs, llm, storage
+from api import db, jobs, limits, llm, storage
 from api.auth import user_from_token
 from api.checks import run_checks
 from api.layout import layout_text
@@ -296,9 +296,9 @@ async def get_extraction_xlsx(extraction_id: str, user: dict = Depends(current_u
 
 
 @api.get("/config")
-async def get_config():
-    """What the UI needs to know about the server: {"paid": paid calls allowed}."""
-    return {"paid": llm.paid_allowed()}
+async def get_config(user: dict = Depends(current_user)):
+    """What the UI needs to know: {"paid": paid calls allowed, "spent": USD this month, "budget": USD per month}."""
+    return {"paid": llm.paid_allowed(), "spent": round(db.Meter(user["id"]).spent(), 2), "budget": limits.MONTHLY_USD}
 
 
 app.include_router(api, prefix="/api")

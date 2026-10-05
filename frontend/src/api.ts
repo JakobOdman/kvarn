@@ -264,9 +264,17 @@ export async function listJobs(folderId?: string): Promise<JobSummary[]> {
   return res.json()
 }
 
-export async function paidAllowed(): Promise<boolean> {
+export interface Config {
+  paid: boolean // paid AI calls allowed on the server
+  spent: number // USD used this month by the logged-in user
+  budget: number // USD per month
+}
+
+/** GET /config */
+export async function getConfig(): Promise<Config> {
   const res = await apiFetch('/config')
-  return res.ok && (await res.json()).paid
+  if (!res.ok) throw new Error(await errorText(res))
+  return res.json()
 }
 
 /** POST /extractions - returns the extraction_id. */
