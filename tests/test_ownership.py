@@ -99,3 +99,9 @@ def test_the_cache_is_per_owner(anna, bertil, monkeypatch):
 class NotCalled(llm.FakeClient):
     def send(self, *args):
         raise RuntimeError("Inget sparat svar")
+
+
+def test_times_are_utc_with_their_offset(anna):
+    """The browser reads a time without an offset as its own local time: on Vercel (UTC) that was 2 hours off."""
+    folder = anna.post("/folders", json={"name": "F"}).json()
+    assert folder["created"].endswith("+00:00")

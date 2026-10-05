@@ -12,7 +12,7 @@ JSON (read results, extraction tables) goes into a JSONB column as it is.
 import atexit
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -55,7 +55,8 @@ def create_schema():
 
 
 def _now() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+    """UTC with its offset, e.g. 2026-10-05T18:12:02+00:00, so the browser shows it in its own time zone."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 # --- Cache, per owner ---
@@ -106,7 +107,7 @@ class Meter:
 
 
 def _month() -> str:
-    return datetime.now().strftime("%Y-%m")
+    return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
 # --- Folders ---
