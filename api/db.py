@@ -32,7 +32,10 @@ def connect():
     prepare_threshold=None because Supabase's pooler does not keep prepared statements between calls."""
     global _pool
     if _pool is None:
-        _pool = ConnectionPool(os.environ.get("DATABASE_URL") or LOCAL_DATABASE, min_size=1, max_size=5, open=True,
+        url = os.environ.get("DATABASE_URL")
+        if not url and os.environ.get("VERCEL"):
+            raise RuntimeError("DATABASE_URL is not set in Vercel.")  # never the local database there
+        _pool = ConnectionPool(url or LOCAL_DATABASE, min_size=1, max_size=5, open=True,
                                kwargs={"row_factory": dict_row, "prepare_threshold": None})
         atexit.register(close)
     return _pool.connection()

@@ -44,3 +44,13 @@ def test_the_api_is_under_api():
     """On Vercel the backend gets /api/... as it is (vercel.json), so the routes must be there too."""
     assert TestClient(app).get("/folders").status_code == 404
     assert TestClient(app).get("/api/folders").status_code == 401
+
+
+def test_on_vercel_without_database_url_it_says_so(monkeypatch):
+    from api import db
+
+    db.close()
+    monkeypatch.setenv("VERCEL", "1")
+    monkeypatch.delenv("DATABASE_URL")
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        db.connect()
