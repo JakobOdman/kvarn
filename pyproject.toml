@@ -1,5 +1,6 @@
-# Vercel reads this when it builds (with uv): the packages, the FastAPI app, and the Vercel Queues subscribers
-# (api/workers.py), which become private functions. requirements.txt is the same list plus pytest, for the local venv.
+# Vercel reads this when it builds (with uv): the packages, the build of the frontend, the FastAPI app (which also
+# serves the frontend, from the CDN) and the Vercel Queues subscribers (api/workers.py), which become private
+# functions. requirements.txt is the same list plus pytest, for the local venv.
 
 [project]
 name = "kvarn"
@@ -24,6 +25,12 @@ dependencies = [
 
 [tool.vercel]
 entrypoint = "api.main:app"
+
+[tool.vercel.scripts]
+build = "cd frontend && npm ci && npm run build"
+
+[tool.vercel.fastapi.static]
+exclude = true  # the frontend is served from the CDN only, not from the function
 
 [[tool.vercel.subscribers]]
 entrypoint = "api.workers"

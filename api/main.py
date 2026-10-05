@@ -8,6 +8,7 @@ import hashlib
 import mimetypes
 import os
 from io import BytesIO
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
@@ -300,4 +301,10 @@ async def get_config():
     return {"paid": llm.paid_allowed()}
 
 
-app.include_router(api, prefix="/api")  # on Vercel the backend gets /api/... as it is, see vercel.json
+app.include_router(api, prefix="/api")
+
+# The website on / and the app on /app/, built by Vite (on Vercel by the build script in pyproject.toml, which
+# puts them on the CDN). The API routes always come first. Locally Vite serves them itself (npm run dev).
+FRONTEND = Path(__file__).parent.parent / "frontend" / "dist"
+if FRONTEND.exists():
+    app.frontend("/", directory=FRONTEND)
