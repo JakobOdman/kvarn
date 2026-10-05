@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; padding: 48px; background: #f4f1ea; color: #2a1d15; font-family: Inter, sans-serif; }
+  .row { display: flex; align-items: center; gap: 64px; padding: 36px 0; border-bottom: 1px solid rgba(42,29,21,.14); }
+  .tag { width: 150px; font: 500 12px 'IBM Plex Mono', monospace; letter-spacing: .08em; text-transform: uppercase; color: #75695e; }
+  .mark { font: 600 150px/1 Inter; letter-spacing: -0.045em; }
+  .small { font: 600 25px/1 Inter; letter-spacing: -0.045em; }
+  .dark { background: #2a1d15; color: #f4f1ea; padding: 18px 26px; border-radius: 12px; }
+  /* The r: an inline svg, 1em high, its bottom on the baseline (y = 100 in the viewBox) */
+  .r { height: 1em; width: auto; vertical-align: baseline; overflow: visible; margin: 0 -0.005em 0 0.01em; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- A: the whole grinder. Box with a drawer knob at the bottom, bowl on top, crank and wooden handle -->
+    <symbol id="rA" viewBox="0 0 42 100" overflow="visible">
+      <mask id="mA"><rect x="-10" y="0" width="70" height="110" fill="white" /><circle cx="14" cy="88" r="2.8" fill="black" /></mask>
+      <g fill="currentColor" mask="url(#mA)">
+        <rect x="1.5" y="74" width="25" height="26" rx="2" />
+        <rect x="7.5" y="50" width="13" height="25" />
+        <path d="M2 45.4 H26 L23.5 52 H4.5 Z" />
+        <rect x="12.6" y="35" width="2.8" height="11" />
+      </g>
+      <path d="M14 37 L33 31" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none" />
+      <rect x="29.5" y="24" width="8" height="12.5" rx="4" fill="currentColor" />
+    </symbol>
+    <!-- B: a plain r stem, the crank as its shoulder and the handle as the knob, a drawer knob cut out of the stem -->
+    <symbol id="rB" viewBox="0 0 40 100" overflow="visible">
+      <mask id="mB"><rect x="-10" y="0" width="70" height="110" fill="white" /><circle cx="10.5" cy="86" r="2.6" fill="black" /></mask>
+      <rect x="4" y="45.4" width="13" height="54.6" fill="currentColor" mask="url(#mB)" />
+      <path d="M10.5 47.5 C 16 42, 24 40.5, 31 40.5" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none" />
+      <rect x="29" y="31" width="8.5" height="13" rx="4.25" fill="currentColor" />
+    </symbol>
+    <!-- C: B with the grinder's bowl at the top of the stem and the box at the bottom -->
+    <symbol id="rC" viewBox="0 0 40 100" overflow="visible">
+      <mask id="mC"><rect x="-10" y="0" width="70" height="110" fill="white" /><circle cx="10.5" cy="89" r="2.4" fill="black" /></mask>
+      <g fill="currentColor" mask="url(#mC)">
+        <rect x="4" y="52" width="13" height="30" />
+        <rect x="1" y="80" width="19" height="20" rx="1.5" />
+        <path d="M0.5 45.4 H20.5 L18 53 H3 Z" />
+      </g>
+      <path d="M10.5 46 C 15 39.5, 23 37.5, 30 37.5" stroke="currentColor" stroke-width="5" stroke-linecap="round" fill="none" />
+      <rect x="28.5" y="27" width="8.5" height="14" rx="4.25" fill="currentColor" />
+    </symbol>
+  </defs>
+</svg>
+
+<div class="row"><span class="tag">Vanlig</span><span class="mark">kvarn</span><span class="small">kvarn</span></div>
+<div class="row"><span class="tag">A · Hela kvarnen</span>
+  <span class="mark">kva<svg class="r" viewBox="0 0 42 100"><use href="#rA" /></svg>n</span>
+  <span class="small">kva<svg class="r" viewBox="0 0 42 100"><use href="#rA" /></svg>n</span>
+  <span class="small dark">kva<svg class="r" viewBox="0 0 42 100"><use href="#rA" /></svg>n</span></div>
+<div class="row"><span class="tag">B · Bokstav med vev</span>
+  <span class="mark">kva<svg class="r" viewBox="0 0 40 100"><use href="#rB" /></svg>n</span>
+  <span class="small">kva<svg class="r" viewBox="0 0 40 100"><use href="#rB" /></svg>n</span>
+  <span class="small dark">kva<svg class="r" viewBox="0 0 40 100"><use href="#rB" /></svg>n</span></div>
+<div class="row"><span class="tag">C · Mittemellan</span>
+  <span class="mark">kva<svg class="r" viewBox="0 0 40 100"><use href="#rC" /></svg>n</span>
+  <span class="small">kva<svg class="r" viewBox="0 0 40 100"><use href="#rC" /></svg>n</span>
+  <span class="small dark">kva<svg class="r" viewBox="0 0 40 100"><use href="#rC" /></svg>n</span></div>
+</body>
+</html>

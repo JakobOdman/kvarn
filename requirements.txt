@@ -1,0 +1,15 @@
+pymupdf
+pillow
+pillow-heif
+markitdown[docx,xlsx,pptx]
+anthropic
+fastapi
+psycopg[binary]
+psycopg_pool
+uvicorn
+openai
+openpyxl
+pytest
+pyjwt[crypto]
+httpx
+vercel-queue

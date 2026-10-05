@@ -1,0 +1,8 @@
+# Vercel reads this when it builds: the FastAPI app, and the Vercel Queues subscribers (api/workers.py),
+# which become private functions. Python packages are in requirements.txt.
+
+[tool.vercel]
+entrypoint = "api.main:app"
+
+[[tool.vercel.subscribers]]
+entrypoint = "api.workers"

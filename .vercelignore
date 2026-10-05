@@ -1,0 +1,17 @@
+# Never uploaded to Vercel: secrets, local data and documents, local environments
+.env
+.venv
+venv/
+data/
+cache/
+testfiler/
+*.err
+/*.json
+!/vercel.json
+frontend/node_modules/
+frontend/dist/
+tests/
+__pycache__/
+*-plan.md
+*-context.md
+*-tasks.md

@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kvarn – Dokument in. Tabeller ut.</title>
+    <meta name="description" content="Kvarn läser dina PDF:er, Excel- och Word-filer och maler fram tabellerna du behöver, med dokument och sida på varje rad." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@1&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Kvarn: flour, rye and wheat */
+      :root {
+        --flour: #f4f1ea;
+        --flour-2: #ebe6db;
+        --rye: #2a1d15;
+        --rye-2: #3b2a1f;
+        --wheat: #d9a441;
+        --ink: #2a1d15;
+        --muted: #75695e;
+        --line: rgba(42, 29, 21, 0.14);
+        --sans: 'Inter', system-ui, sans-serif;
+        --serif: 'Instrument Serif', Georgia, serif;
+        --mono: 'IBM Plex Mono', ui-monospace, monospace;
+        --ease: cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--flour);
+        color: var(--ink);
+        font: 400 16px/1.6 var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 32px;
+      }
+
+      /* Headlines in the wordmark's tight grotesk, one word in italic serif as the accent */
+      h1,
+      h2,
+      h3 {
+        font-family: var(--sans);
+        font-weight: 600;
+        letter-spacing: -0.045em;
+        margin: 0;
+      }
+
+      h1 em,
+      h2 em {
+        font: italic 400 1.08em var(--serif);
+        letter-spacing: -0.02em;
+        color: var(--wheat);
+      }
+
+      .label {
+        font: 500 11px var(--mono);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        border-radius: 999px;
+        background: var(--rye);
+        color: var(--flour);
+        font: 500 14px var(--sans);
+        text-decoration: none;
+        transition: transform 0.3s var(--ease), background 0.2s;
+      }
+
+      .button:hover {
+        transform: translateY(-1px);
+        background: var(--rye-2);
+      }
+
+      .button .arrow {
+        transition: transform 0.3s var(--ease);
+      }
+
+      .button:hover .arrow {
+        transform: translateX(3px);
+      }
+
+      .link {
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 2px;
+      }
+
+      .dark .button {
+        background: var(--wheat);
+        color: var(--rye);
+      }
+
+      /* Nav */
+
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(244, 241, 234, 0.85);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--line);
+      }
+
+      nav .wrap {
+        display: flex;
+        align-items: center;
+        height: 64px;
+        gap: 40px;
+      }
+
+      .wordmark {
+        font: 600 24px var(--sans);
+        letter-spacing: -0.045em;
+        text-decoration: none;
+      }
+
+      /* The r in kvarn as an old coffee grinder (logo/kvarn-r.svg) */
+      .grinder-r {
+        height: 1em;
+        width: auto;
+        vertical-align: baseline;
+        margin-left: 0.02em;
+      }
+
+      .nav-links {
+        display: flex;
+        gap: 28px;
+        font-size: 14px;
+      }
+
+      .nav-links a {
+        text-decoration: none;
+        color: var(--muted);
+      }
+
+      .nav-links a:hover {
+        color: var(--ink);
+      }
+
+      .nav-login {
+        margin-left: auto;
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+      }
+
+      .nav-login:hover {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+
+      nav .button {
+        padding: 8px 16px;
+        font-size: 13px;
+      }
+
+      /* Hero: text on the left, the mill on the right */
+
+      .hero {
+        padding: 96px 0 110px;
+      }
+
+      .hero .wrap {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 48px;
+        align-items: center;
+      }
+
+      .hero h1 {
+        margin: 22px 0 24px;
+        font-size: clamp(46px, 6.4vw, 92px);
+        white-space: nowrap;
+        line-height: 0.92;
+      }
+
+      .hero p {
+        max-width: 470px;
+        margin: 0 0 34px;
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 22px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      /* The mill: documents fall in, the stone turns, rows come out */
+      .mill {
+        position: relative;
+        aspect-ratio: 1 / 1.05;
+        max-width: 480px;
+        margin-left: auto;
+        width: 100%;
+      }
+
+      .sheet {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        width: 58px;
+        height: 74px;
+        margin-left: -29px;
+        border: 1.5px solid var(--rye);
+        border-radius: 3px;
+        background:
+          linear-gradient(var(--rye), var(--rye)) 10px 16px / 30px 2px no-repeat,
+          linear-gradient(var(--muted), var(--muted)) 10px 26px / 36px 2px no-repeat,
+          linear-gradient(var(--muted), var(--muted)) 10px 34px / 28px 2px no-repeat,
+          linear-gradient(var(--muted), var(--muted)) 10px 42px / 34px 2px no-repeat,
+          var(--flour);
+        opacity: 0;
+        animation: fall 3.6s var(--ease) infinite;
+      }
+
+      .sheet:nth-child(2) {
+        animation-delay: 1.2s;
+        rotate: -8deg;
+      }
+
+      .sheet:nth-child(3) {
+        animation-delay: 2.4s;
+        rotate: 6deg;
+      }
+
+      @keyframes fall {
+        0% {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        15% {
+          opacity: 1;
+        }
+        55% {
+          opacity: 1;
+          transform: translateY(120px) scale(0.85);
+        }
+        70%,
+        100% {
+          opacity: 0;
+          transform: translateY(150px) scale(0.5);
+        }
+      }
+
+      .stone {
+        position: absolute;
+        left: 50%;
+        top: 30%;
+        width: 46%;
+        aspect-ratio: 1;
+        translate: -50% 0;
+        animation: turn 14s linear infinite;
+      }
+
+      @keyframes turn {
+        to {
+          rotate: 360deg;
+        }
+      }
+
+      .out {
+        position: absolute;
+        left: 6%;
+        right: 6%;
+        bottom: 0;
+        border: 1.5px solid var(--rye);
+        border-radius: 10px;
+        background: #fffdf8;
+        overflow: hidden;
+      }
+
+      .out-head {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr;
+        padding: 9px 14px;
+        border-bottom: 1.5px solid var(--rye);
+        font: 500 10px var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .out-row {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr 1fr;
+        gap: 10px;
+        padding: 10px 14px;
+        border-top: 1px solid var(--line);
+        animation: row 7.2s var(--ease) infinite both;
+      }
+
+      .out-row:nth-child(2) {
+        border-top: 0;
+      }
+
+      .out-row i {
+        height: 7px;
+        border-radius: 4px;
+        background: var(--rye);
+        opacity: 0.85;
+      }
+
+      .out-row i:nth-child(2),
+      .out-row i:nth-child(3) {
+        background: var(--wheat);
+        justify-self: end;
+      }
+
+      .out-row:nth-child(3) {
+        animation-delay: 1.2s;
+      }
+
+      .out-row:nth-child(4) {
+        animation-delay: 2.4s;
+      }
+
+      .out-row:nth-child(5) {
+        animation-delay: 3.6s;
+      }
+
+      @keyframes row {
+        0%,
+        8% {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        16%,
+        88% {
+          opacity: 1;
+          transform: none;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      /* Sections */
+
+      section {
+        padding: 120px 0;
+      }
+
+      .dark {
+        background: var(--rye);
+        color: var(--flour);
+      }
+
+      .dark .label,
+      .dark p {
+        color: #c5b8a8;
+      }
+
+      .tint {
+        background: var(--flour-2);
+      }
+
+      h2 {
+        font-size: clamp(40px, 5.4vw, 68px);
+        line-height: 0.98;
+        margin: 16px 0 22px;
+      }
+
+      section p {
+        color: var(--muted);
+        max-width: 540px;
+      }
+
+      /* Before and after: a scanned PDF page in a viewer, then the same numbers as a table */
+
+      .compare {
+        display: grid;
+        grid-template-columns: 1.1fr auto 1fr;
+        gap: 28px;
+        align-items: center;
+        margin-top: 56px;
+      }
+
+      .viewer {
+        border-radius: 14px;
+        background: #4a3a2e;
+        overflow: hidden;
+        box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.6);
+      }
+
+      .viewer-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: #3b2d23;
+        font: 500 11px var(--mono);
+        color: #c5b8a8;
+      }
+
+      .viewer-bar .dots {
+        display: flex;
+        gap: 6px;
+      }
+
+      .viewer-bar .dots i {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #6b5a4c;
+      }
+
+      .viewer-bar .zoom {
+        margin-left: auto;
+        letter-spacing: 0.1em;
+      }
+
+      .viewer-body {
+        padding: 26px 30px 30px;
+      }
+
+      /* The scanned page: a little crooked, grainy and grey, like a printout run through a scanner */
+      .paper {
+        position: relative;
+        padding: 22px 24px 18px;
+        background: #f7f4ec;
+        color: #3d3631;
+        font: 9.5px/1.45 Georgia, 'Times New Roman', serif;
+        rotate: -1.2deg;
+        filter: contrast(0.92) sepia(0.12);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      }
+
+      .paper::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E");
+        mix-blend-mode: multiply;
+        pointer-events: none;
+      }
+
+      .paper-head {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 1px solid #b9b0a3;
+        padding-bottom: 6px;
+        margin-bottom: 10px;
+        font-size: 8px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #6f665c;
+      }
+
+      .paper h4 {
+        margin: 0 0 8px;
+        font: 700 13px Georgia, serif;
+        letter-spacing: 0.02em;
+      }
+
+      .paper table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 9px;
+      }
+
+      .paper th,
+      .paper td {
+        padding: 3px 4px;
+        border-bottom: 0.5px solid #c9c0b3;
+        text-align: right;
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+        color: inherit;
+      }
+
+      .paper th {
+        font: italic 8.5px/1.2 Georgia, serif;
+        color: #6f665c;
+        border-bottom: 1px solid #8c8378;
+        vertical-align: bottom;
+      }
+
+      .paper th:first-child,
+      .paper td:first-child {
+        text-align: left;
+      }
+
+      .paper tfoot td {
+        font-weight: 700;
+        border-top: 1px solid #8c8378;
+        border-bottom: 0;
+      }
+
+      .paper .foot {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        font-size: 7.5px;
+        color: #8c8378;
+      }
+
+      .stamp {
+        position: absolute;
+        right: 22px;
+        top: 50px;
+        padding: 2px 8px;
+        border: 1.5px solid rgba(176, 58, 46, 0.55);
+        border-radius: 3px;
+        color: rgba(176, 58, 46, 0.6);
+        font: 700 9px var(--mono);
+        letter-spacing: 0.14em;
+        rotate: 8deg;
+      }
+
+      /* Someone trying to select a row: the selection runs crooked across the columns */
+      .select {
+        position: absolute;
+        background: rgba(80, 140, 255, 0.28);
+        pointer-events: none;
+      }
+
+      .cursor {
+        position: absolute;
+        width: 14px;
+        height: 18px;
+        pointer-events: none;
+      }
+
+      .arrow-big {
+        align-self: center;
+        font: 400 40px var(--serif);
+        color: var(--wheat);
+      }
+
+      .clean {
+        border: 1px solid rgba(244, 241, 234, 0.16);
+        border-radius: 14px;
+        background: rgba(244, 241, 234, 0.04);
+        overflow: hidden;
+      }
+
+      .clean .label {
+        display: block;
+        padding: 14px 18px;
+        border-bottom: 1px solid rgba(244, 241, 234, 0.12);
+      }
+
+      .clean table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .clean th {
+        padding: 9px 18px;
+        color: #c5b8a8;
+        border-bottom: 1px solid rgba(244, 241, 234, 0.12);
+      }
+
+      .clean td {
+        padding: 9px 18px;
+        border-bottom: 1px dashed rgba(244, 241, 234, 0.1);
+        color: var(--flour);
+      }
+
+      .clean tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .clean td.src {
+        color: #c5b8a8;
+      }
+
+      /* Steps */
+
+      .steps {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 28px;
+        margin-top: 56px;
+      }
+
+      .step {
+        border-top: 3px solid var(--rye);
+        padding-top: 22px;
+      }
+
+      .step .num {
+        font: 500 44px/1 var(--mono);
+        color: var(--wheat);
+        letter-spacing: -0.04em;
+      }
+
+      .step h3 {
+        font-size: 26px;
+        margin: 18px 0 8px;
+      }
+
+      .step p {
+        font-size: 15px;
+        margin: 0;
+      }
+
+      /* Example result */
+      .mock {
+        margin-top: 64px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fffdf8;
+        overflow: hidden;
+        box-shadow: 0 30px 60px -32px rgba(42, 29, 21, 0.3);
+      }
+
+      .mock-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+      }
+
+      .mock-head b {
+        font-weight: 600;
+      }
+
+      .ok {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #2f7a46;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th {
+        text-align: left;
+        font: 500 11px var(--mono);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+        padding: 12px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      td {
+        padding: 12px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .src {
+        font: 12px var(--mono);
+        color: var(--muted);
+      }
+
+      /* Checks */
+
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 64px;
+        align-items: center;
+      }
+
+      .checks {
+        display: grid;
+        gap: 10px;
+      }
+
+      .check {
+        display: flex;
+        gap: 14px;
+        align-items: baseline;
+        padding: 16px 20px;
+        border-radius: 12px;
+        background: var(--rye-2);
+      }
+
+      .check .dot {
+        flex: none;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #8fc79f;
+      }
+
+      .check .dot.no {
+        background: var(--wheat);
+      }
+
+      .check small {
+        display: block;
+        font-size: 13px;
+        color: #c5b8a8;
+      }
+
+      /* Who it's for */
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+        margin-top: 48px;
+      }
+
+      .card {
+        padding: 26px;
+        border-radius: 14px;
+        background: var(--flour);
+        border: 1px solid var(--line);
+        transition: transform 0.4s var(--ease), border-color 0.3s;
+      }
+
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: var(--wheat);
+      }
+
+      .card h3 {
+        font-size: 22px;
+        margin-bottom: 8px;
+      }
+
+      .card p {
+        font-size: 14px;
+        margin: 0;
+      }
+
+      /* Closing and footer */
+
+      .closing {
+        padding: 140px 0 120px;
+      }
+
+      .closing h2 {
+        max-width: 820px;
+      }
+
+      footer {
+        background: var(--rye);
+        color: var(--flour);
+        overflow: hidden;
+        padding: 40px 0 0;
+      }
+
+      .foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        font-size: 13px;
+        color: #c5b8a8;
+        border-top: 1px solid rgba(244, 241, 234, 0.14);
+        padding-top: 24px;
+      }
+
+      .giant {
+        font: 600 clamp(120px, 26vw, 360px) / 0.78 var(--sans);
+        letter-spacing: -0.07em;
+        margin: 56px 0 0 -0.04em;
+        padding-bottom: 0.06em;
+      }
+
+      .giant em {
+        font: italic 400 1em var(--serif);
+        color: var(--wheat);
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.8s var(--ease), transform 0.8s var(--ease);
+      }
+
+      .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .sheet,
+        .stone,
+        .out-row {
+          animation: none;
+        }
+        .sheet {
+          opacity: 1;
+        }
+      }
+
+      @media (max-width: 860px) {
+        .nav-links {
+          display: none;
+        }
+        .hero h1 {
+          white-space: normal;
+        }
+        .hero .wrap,
+        .split,
+        .steps,
+        .cards,
+        .compare {
+          grid-template-columns: 1fr;
+        }
+        .mill {
+          margin: 0 auto;
+          max-width: 360px;
+        }
+        .arrow-big {
+          rotate: 90deg;
+          justify-self: center;
+        }
+        .src {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="wrap">
+        <a class="wordmark" href="#" aria-label="kvarn">kva<svg class="grinder-r" viewBox="-3 0 31.4 100" overflow="visible" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3.5 74H24.5A2 2 0 0 1 26.5 76V98A2 2 0 0 1 24.5 100H3.5A2 2 0 0 1 1.5 98V76A2 2 0 0 1 3.5 74ZM14 85.2A2.8 2.8 0 1 0 14 90.8A2.8 2.8 0 1 0 14 85.2Z" /> <rect x="7.5" y="50" width="13" height="25" /> <path d="M2 45.4H26L23.5 52H4.5Z" /> <rect x="12.6" y="35" width="2.8" height="11" /> <path d="M14 37L33 31" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none" /> <rect x="29.5" y="24" width="8" height="12.5" rx="4" /></svg>n</a>
+        <div class="nav-links">
+          <a href="#sa-funkar-det">Så funkar det</a>
+          <a href="#kontroller">Kontroller</a>
+          <a href="#for-vem">För vem</a>
+        </div>
+        <a class="nav-login" href="/app/">Logga in</a>
+        <a class="button" href="mailto:hej@thekvarn.com?subject=Tillg%C3%A5ng%20till%20Kvarn">Be om tillgång</a>
+      </div>
+    </nav>
+
+    <header class="hero">
+      <div class="wrap">
+        <div>
+          <span class="label">PDF · Word · Excel · Bilder</span>
+          <h1>Dokument in.<br />Tabeller <em>ut.</em></h1>
+          <p>
+            Kvarn läser dina dokument och maler fram exakt de tabeller du behöver. Med dokument och sida på varje rad, så att
+            du alltid hittar tillbaka.
+          </p>
+          <div class="actions">
+            <a class="button" href="mailto:hej@thekvarn.com?subject=Tillg%C3%A5ng%20till%20Kvarn">Be om tillgång <span class="arrow">→</span></a>
+            <a class="link" href="#sa-funkar-det">Se hur det funkar</a>
+          </div>
+        </div>
+
+        <div class="mill" aria-hidden="true">
+          <div class="sheet"></div>
+          <div class="sheet"></div>
+          <div class="sheet"></div>
+          <svg class="stone" viewBox="0 0 200 200">
+            <circle cx="100" cy="100" r="96" fill="#ebe6db" stroke="#2a1d15" stroke-width="3" />
+            <circle cx="100" cy="100" r="16" fill="#f4f1ea" stroke="#2a1d15" stroke-width="3" />
+            <g stroke="#2a1d15" stroke-width="2.5" stroke-linecap="round">
+              <path d="M100 84 V14" /><path d="M100 116 V186" /><path d="M84 100 H14" /><path d="M116 100 H186" />
+              <path d="M111 89 L161 39" /><path d="M89 111 L39 161" /><path d="M89 89 L39 39" /><path d="M111 111 L161 161" />
+            </g>
+            <g stroke="#d9a441" stroke-width="2.5" stroke-linecap="round">
+              <path d="M104 60 L130 34" /><path d="M140 104 L166 130" /><path d="M96 140 L70 166" /><path d="M60 96 L34 70" />
+            </g>
+          </svg>
+          <div class="out">
+            <div class="out-head"><span>Bolag</span><span style="text-align: right">Värde</span><span style="text-align: right">Sida</span></div>
+            <div class="out-row"><i style="width: 80%"></i><i style="width: 70%"></i><i style="width: 30%"></i></div>
+            <div class="out-row"><i style="width: 62%"></i><i style="width: 54%"></i><i style="width: 30%"></i></div>
+            <div class="out-row"><i style="width: 72%"></i><i style="width: 80%"></i><i style="width: 30%"></i></div>
+            <div class="out-row"><i style="width: 55%"></i><i style="width: 46%"></i><i style="width: 30%"></i></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section class="dark">
+      <div class="wrap">
+        <div class="reveal">
+          <span class="label">Problemet</span>
+          <h2>Siffror som sitter <em>fast.</em></h2>
+          <p>
+            Kvartalsrapporter, förfrågningsunderlag och avtal är gjorda för att läsas, inte räknas på. Tabellerna är
+            bilder av siffror: de går inte att markera, kopiera eller summera. Så någon sitter och för över dem för hand.
+          </p>
+        </div>
+        <div class="compare reveal">
+          <div class="viewer" aria-label="En skannad PDF-sida med en tabell">
+            <div class="viewer-bar">
+              <span class="dots"><i></i><i></i><i></i></span>
+              <span>Q4-rapport.pdf · Sida 11 av 36</span>
+              <span class="zoom">− 100 % +</span>
+            </div>
+            <div class="viewer-body">
+              <div class="paper">
+                <div class="paper-head"><span>Exempelfond AB · Quarterly report</span><span>Q4 2025</span></div>
+                <span class="stamp">KONFIDENTIELLT</span>
+                <h4>Portfolio summary</h4>
+                <table>
+                  <thead>
+                    <tr><th>Company</th><th>Date of first<br />investment</th><th>Ownership</th><th>Total<br />paid-in</th><th>Fair value</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Nordljus AB</td><td>03/2021</td><td>12.4%</td><td>12,400,000</td><td>18,950,000</td></tr>
+                    <tr><td>Fjällbit Technologies</td><td>11/2021</td><td>8.1%</td><td>8,000,000</td><td>6,120,000</td></tr>
+                    <tr><td>Saltsjö Health</td><td>06/2022</td><td>15.0%</td><td>15,750,000</td><td>31,200,000</td></tr>
+                    <tr><td>Granit Robotics¹</td><td>02/2020</td><td>0.0%</td><td>5,300,000</td><td>0</td></tr>
+                  </tbody>
+                  <tfoot>
+                    <tr><td>Total</td><td></td><td></td><td>41,450,000</td><td>56,270,000</td></tr>
+                  </tfoot>
+                </table>
+                <div class="foot"><span>¹ Divested during the period.</span><span>11</span></div>
+                <span class="select" style="left: 34%; top: 96px; width: 40%; height: 12px; rotate: -1deg"></span>
+                <span class="select" style="left: 7%; top: 108px; width: 22%; height: 12px; rotate: -1deg"></span>
+                <span class="select" style="left: 60%; top: 133px; width: 31%; height: 12px; rotate: -1deg"></span>
+                <svg class="cursor" style="left: 88%; top: 142px" viewBox="0 0 14 18"><path d="M1 1 L1 15 L4.5 11.5 L7 17 L9.5 16 L7 10.5 L12 10.5 Z" fill="#fff" stroke="#2a1d15" stroke-width="1.2" stroke-linejoin="round" /></svg>
+              </div>
+            </div>
+          </div>
+          <div class="arrow-big">→</div>
+          <div class="clean">
+            <span class="label">Malt i Kvarn</span>
+            <table>
+              <thead><tr><th>Bolag</th><th class="num">Verkligt värde</th><th>Sida</th></tr></thead>
+              <tbody>
+                <tr><td>Nordljus AB</td><td class="num">18 950 000</td><td class="src">11</td></tr>
+                <tr><td>Fjällbit Technologies</td><td class="num">6 120 000</td><td class="src">11</td></tr>
+                <tr><td>Saltsjö Health</td><td class="num">31 200 000</td><td class="src">11</td></tr>
+                <tr><td>Granit Robotics</td><td class="num">0</td><td class="src">11</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sa-funkar-det">
+      <div class="wrap">
+        <div class="reveal">
+          <span class="label">Så funkar det</span>
+          <h2>Tre steg. Sedan <em>mals</em> det ner.</h2>
+          <p>Du beskriver en gång vad du vill ha ut. Sedan kör du det på hur många dokument som helst.</p>
+        </div>
+        <div class="steps reveal">
+          <div class="step">
+            <span class="num">01</span>
+            <h3>Gör en mall.</h3>
+            <p>Skriv en instruktion och välj tabeller och fält. Innehav, krav, prisposter: det du behöver.</p>
+          </div>
+          <div class="step">
+            <span class="num">02</span>
+            <h3>Lägg i dokumenten.</h3>
+            <p>PDF, Word, Excel, bilder. Text läses direkt, skannade sidor av AI. Allt sorteras i samlingar.</p>
+          </div>
+          <div class="step">
+            <span class="num">03</span>
+            <h3>Få tabellerna.</h3>
+            <p>En rad per sak, med dokument och sida. Ladda ner som Excel eller CSV.</p>
+          </div>
+        </div>
+
+        <div class="mock reveal" aria-label="Exempel på ett resultat">
+          <div class="mock-head">
+            <b>Exempelfond AB</b>
+            <span class="label">Innehav · 4 rader</span>
+            <span class="ok">● 3 av 3 kontroller OK</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Bolag</th>
+                <th class="num">Anskaffningsvärde</th>
+                <th class="num">Verkligt värde</th>
+                <th>Status</th>
+                <th>Källa</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Nordljus AB</td><td class="num">12 400 000</td><td class="num">18 950 000</td><td>aktiv</td><td class="src">rapport.pdf · s. 11</td></tr>
+              <tr><td>Fjällbit Technologies</td><td class="num">8 000 000</td><td class="num">6 120 000</td><td>aktiv</td><td class="src">rapport.pdf · s. 11</td></tr>
+              <tr><td>Saltsjö Health</td><td class="num">15 750 000</td><td class="num">31 200 000</td><td>aktiv</td><td class="src">rapport.pdf · s. 11</td></tr>
+              <tr><td>Granit Robotics</td><td class="num">5 300 000</td><td class="num">0</td><td>avyttrad</td><td class="src">rapport.pdf · s. 11</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="dark" id="kontroller">
+      <div class="wrap split">
+        <div class="reveal">
+          <span class="label">Kontroller</span>
+          <h2>Siffror som går <em>ihop.</em></h2>
+          <p>
+            AI läser, kod räknar. Lägg till kontroller i mallen så stämmer Kvarn av varje dokument: summan mot totalraden,
+            antalet mot det rapporten säger, inga dubbletter. Gratis och exakt, varje gång.
+          </p>
+        </div>
+        <div class="checks reveal">
+          <div class="check"><span class="dot"></span><span>Summan av innehav = totalraden<small>Exempelfond AB · 56 270 000, ska vara 56 270 000</small></span></div>
+          <div class="check"><span class="dot"></span><span>Alla bolag är ifyllda<small>Exempelfond AB · alla 4 rader ifyllda</small></span></div>
+          <div class="check"><span class="dot"></span><span>Inga dubbletter<small>Exempelfond AB · alla 4 värden unika</small></span></div>
+          <div class="check"><span class="dot no"></span><span>Antal bolag = rapportens uppgift<small>Andra Fonden AB · 26 rader, ska vara 22. Titta närmare.</small></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tint" id="for-vem">
+      <div class="wrap">
+        <div class="reveal">
+          <span class="label">För vem</span>
+          <h2>Kvarn är <em>för…</em></h2>
+        </div>
+        <div class="cards reveal">
+          <div class="card"><h3>Investerare</h3><p>Portföljbolag, värderingar och nyckeltal ur förvaltarnas kvartalsrapporter.</p></div>
+          <div class="card"><h3>Anbud</h3><p>Skall-krav, viten, mängder och prisposter ur förfrågningsunderlaget.</p></div>
+          <div class="card"><h3>Ekonomi</h3><p>Fakturor, avtal och underlag till tabeller du kan stämma av.</p></div>
+          <div class="card"><h3>Utvecklare</h3><p>Mallar och tabeller via API, rakt in i er egen pipeline.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="dark closing" id="kom-igang">
+      <div class="wrap reveal">
+        <span class="label">Kom igång</span>
+        <h2>Sluta kopiera. Börja <em>mala.</em></h2>
+        <p>Lägg i dina dokument och se tabellerna växa fram. Första mallen tar fem minuter.</p>
+        <div class="actions" style="margin-top: 34px">
+          <a class="button" href="mailto:hej@thekvarn.com?subject=Tillg%C3%A5ng%20till%20Kvarn">Be om tillgång <span class="arrow">→</span></a>
+          <a class="link" href="/app/" style="color: var(--flour); border-color: rgba(244, 241, 234, 0.3)">Har du konto? Logga in</a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot">
+          <span>Dokument in. Tabeller ut.</span>
+          <span>© 2026 Kvarn · thekvarn.com</span>
+        </div>
+        <div class="giant" aria-label="kvarn">kva<svg class="grinder-r" viewBox="-3 0 31.4 100" overflow="visible" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3.5 74H24.5A2 2 0 0 1 26.5 76V98A2 2 0 0 1 24.5 100H3.5A2 2 0 0 1 1.5 98V76A2 2 0 0 1 3.5 74ZM14 85.2A2.8 2.8 0 1 0 14 90.8A2.8 2.8 0 1 0 14 85.2Z" /> <rect x="7.5" y="50" width="13" height="25" /> <path d="M2 45.4H26L23.5 52H4.5Z" /> <rect x="12.6" y="35" width="2.8" height="11" /> <path d="M14 37L33 31" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none" /> <rect x="29.5" y="24" width="8" height="12.5" rx="4" /></svg>n<em>.</em></div>
+      </div>
+    </footer>
+
+    <script>
+      // Sections fade up as they scroll into view
+      const seen = new IntersectionObserver((entries) => {
+        for (const e of entries) if (e.isIntersecting) e.target.classList.add('in')
+      }, { threshold: 0.15 })
+      document.querySelectorAll('.reveal').forEach((el) => seen.observe(el))
+    </script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+venv/
+__pycache__/
+.DS_Store
+.env
+
+# Investerarrapporter och resultat från dem, ej för spridning
+testfiler/
+*.json
+!vercel.json
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig*.json
+*.err
+
+# LLM-svar innehåller data ur dokumenten
+cache/
+
+# Lästa dokument och resultat, ej för spridning
+data/
+
+# Projektdokumenten (plan, context, tasks) nämner kunder: bara lokalt, aldrig på GitHub
+*-plan.md
+*-context.md
+*-tasks.md
