@@ -130,10 +130,15 @@ async def create_job(request: JobRequest, user: dict = Depends(current_user)):
         raise HTTPException(400, "Filen är inte uppladdad.")
     if hashlib.sha256(data).hexdigest() != request.sha256:
         raise HTTPException(400, "Filen stämmer inte med sin sha256.")
+    # A new version replaces the old one: same name in the same folder. Removed after the new one is added, so
+    # that the file stays when it is the same file again.
+    old = [d["id"] for d in db.list_documents(user["id"], request.folder_id) if d["name"] == request.name]
     job_id = uuid4().hex
     db.add_document(job_id, request.name, request.sha256,
                     {"allow_model": not request.no_model, "max_model_pages": request.max_model_pages or None,
                      "model": request.model, "words": request.words}, request.folder_id)
+    for doc_id in old:
+        db.delete_document(doc_id)
     await jobs.enqueue("read", {"job_id": job_id})
     return {"job_id": job_id}
 

@@ -22,3 +22,6 @@ data/
 *-plan.md
 *-context.md
 *-tasks.md
+.vercel
+.env*
+_uv/

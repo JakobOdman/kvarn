@@ -39,6 +39,29 @@ def test_upload_then_read(anna, folder, started):
     assert storage.read(anna.user_id, SHA) == FILE
 
 
+def test_a_new_version_replaces_the_old_one(anna, folder, started):
+    """Same name in the same folder: only the new document is left. Another folder keeps its own."""
+    other = anna.post("/folders", json={"name": "Andra"}).json()["id"]
+    upload(anna, folder)
+    first = anna.post("/jobs", json={"folder_id": folder, "name": "rapport.pdf", "sha256": SHA}).json()["job_id"]
+    anna.post("/jobs", json={"folder_id": other, "name": "rapport.pdf", "sha256": SHA})
+    new = b"%PDF-1.4 en ny version"
+    new_sha = hashlib.sha256(new).hexdigest()
+    upload(anna, folder, data=new, sha=new_sha)
+    second = anna.post("/jobs", json={"folder_id": folder, "name": "rapport.pdf", "sha256": new_sha}).json()["job_id"]
+    assert [d["job_id"] for d in anna.get(f"/jobs?folder_id={folder}").json()] == [second]
+    assert anna.get(f"/jobs/{first}").status_code == 404
+    assert len(anna.get(f"/jobs?folder_id={other}").json()) == 1
+
+
+def test_the_same_file_again_keeps_its_file(anna, folder, started):
+    upload(anna, folder)
+    anna.post("/jobs", json={"folder_id": folder, "name": "rapport.pdf", "sha256": SHA})
+    anna.post("/jobs", json={"folder_id": folder, "name": "rapport.pdf", "sha256": SHA})
+    assert len(anna.get(f"/jobs?folder_id={folder}").json()) == 1
+    assert storage.read(anna.user_id, SHA) == FILE
+
+
 def test_a_file_that_does_not_match_its_sha_is_refused(anna, folder, started):
     assert upload(anna, folder, data=b"annat innehall").status_code == 400
     assert anna.post("/jobs", json={"folder_id": folder, "name": "a.pdf", "sha256": SHA}).status_code == 400
