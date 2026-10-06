@@ -80,7 +80,7 @@ export function FileQueue({
 }) {
   const [items, setItems] = useState<Item[]>([])
   const [noModel, setNoModel] = useState(true)
-  const [words, setWords] = useState(false)
+  const [words, setWords] = useState(true)
   const [newName, setNewName] = useState<string | null>(null) // the folder name while it is being edited
   const [templates, setTemplates] = useState<Template[]>([])
 
