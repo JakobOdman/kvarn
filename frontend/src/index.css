@@ -1403,7 +1403,7 @@ code {
 .results table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.4;
 }
 
@@ -1417,7 +1417,7 @@ code {
   background: var(--surface);
   padding: 6px 10px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted);
   text-align: left;
   white-space: nowrap;
@@ -1449,7 +1449,7 @@ code {
   width: 100%;
   min-width: 60px;
   max-width: 220px;
-  font: 400 12px var(--sans);
+  font: 400 11.5px var(--sans);
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--line);
@@ -1485,7 +1485,7 @@ code {
 
 .results td.doc {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1493,7 +1493,7 @@ code {
 
 .results td.num {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11.5px;
 }
 
 .results tbody tr:first-child td {
