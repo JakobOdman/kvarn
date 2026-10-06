@@ -27,5 +27,6 @@ def extract_document(name: str, result: dict, template: Template, cache, meter=N
     if not result["pages"]:
         raise ValueError("Dokumentet har ingen text.")
     prompt = f"{template.prompt}\n\n{ENGINE_PROMPT}\n{pages_as_text(result)}"
-    answer, usage = llm.ask(prompt, schema_for(template), cache, meter, client=client, paid=paid)
+    answer, usage = llm.ask(prompt, schema_for(template), cache, meter, model=template.model, client=client,
+                            paid=paid)
     return {table: [{"dokument": name, **row} for row in rows] for table, rows in answer.items()}, usage

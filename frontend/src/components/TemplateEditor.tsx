@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import {
   deleteTemplate,
   listTemplates,
+  MODELS,
   saveTemplate,
+  type Model,
   type Template,
   type TemplateField,
   type TemplateTable,
@@ -20,6 +22,7 @@ const newTemplate = (): Template => ({
   name: '',
   prompt: '',
   tables: [newTable()],
+  model: 'gpt-5.4-mini',
   page_selection: false,
   rules: [],
 })
@@ -135,6 +138,16 @@ export function TemplateEditor() {
               <label>
                 <span className="caps">Namn</span>
                 <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+              </label>
+              <label>
+                <span className="caps">Modell</span>
+                <select value={draft.model} onChange={(e) => setDraft({ ...draft, model: e.target.value as Model })}>
+                  {(Object.keys(MODELS) as Model[]).map((m) => (
+                    <option key={m} value={m}>
+                      {MODELS[m]}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
                 <span className="caps">Prompt</span>

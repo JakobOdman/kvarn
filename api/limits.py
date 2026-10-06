@@ -12,6 +12,8 @@ import os
 # USD per million tokens (in, out). Azure Global Standard and Anthropic list prices, 2026-10.
 PRICES = {
     "gpt-5.4": (2.50, 15.00),
+    "gpt-5.4-mini": (0.75, 4.50),
+    "gpt-5.4-nano": (0.20, 1.25),
     "claude-sonnet-5-5": (2.00, 10.00),
 }
 MOST_EXPENSIVE = max(PRICES.values(), key=lambda p: p[1])  # for a model not in the list

@@ -41,6 +41,7 @@ class Template(BaseModel):
     name: str
     prompt: str
     tables: list[Table]
+    model: Literal["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"] = "gpt-5.4"
     page_selection: bool = False  # later: a cheap model picks the relevant pages first
     rules: list[Rule] = []
 

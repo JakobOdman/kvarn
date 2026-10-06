@@ -142,11 +142,19 @@ export interface Rule {
   target_field: string
 }
 
+export const MODELS = {
+  'gpt-5.4': 'GPT-5.4 – svåra dokument',
+  'gpt-5.4-mini': 'GPT-5.4 mini – de flesta jobb',
+  'gpt-5.4-nano': 'GPT-5.4 nano – enkla tabeller',
+}
+export type Model = keyof typeof MODELS
+
 export interface Template {
   id: string
   name: string
   prompt: string
   tables: TemplateTable[]
+  model: Model
   page_selection: boolean
   rules: Rule[]
 }
