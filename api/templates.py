@@ -44,6 +44,7 @@ class Template(BaseModel):
     model: Literal["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"] = "gpt-5.4"
     page_selection: bool = False  # later: a cheap model picks the relevant pages first
     rules: list[Rule] = []
+    locked: bool = False  # finished: can't be changed or deleted until it is unlocked
 
     @model_validator(mode="after")
     def check_names(self):
@@ -83,18 +84,35 @@ def load_template(template_id: str, user_id: str) -> Template | None:
     return Template.model_validate(template) if template else None
 
 
+class Locked(Exception):
+    """The template is locked."""
+
+
 def save_template(template: Template, user_id: str) -> Template | None:
     """Create (a new template gets a random id) or update. None if the id is someone else's."""
     if not template.name.strip():
         raise ValueError("Mallen behöver ett namn.")
     if not template.id:
         template.id = uuid4().hex
+    elif (saved := load_template(template.id, user_id)) and saved.locked:
+        raise Locked
     if not db.save_template(template.id, user_id, template.name, template.model_dump()):
         return None
     return template
 
 
+def set_locked(template_id: str, user_id: str, locked: bool) -> Template | None:
+    template = load_template(template_id, user_id)
+    if template is None:
+        return None
+    template.locked = locked
+    db.save_template(template.id, user_id, template.name, template.model_dump())
+    return template
+
+
 def delete_template(template_id: str, user_id: str) -> bool:
+    if (saved := load_template(template_id, user_id)) and saved.locked:
+        raise Locked
     return db.delete_template(template_id, user_id)
 
 

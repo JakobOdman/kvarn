@@ -4,6 +4,7 @@ import { DocumentView } from './components/DocumentView'
 import { ExtractView } from './components/ExtractView'
 import { FileQueue } from './components/FileQueue'
 import { FolderList } from './components/FolderList'
+import { IntegrateView } from './components/IntegrateView'
 import { Login } from './components/Login'
 import { NavMenu, type Tab } from './components/NavMenu'
 import { Side } from './components/Side'
@@ -88,6 +89,11 @@ export default function App() {
         {tab === 'extract' && (
           <main className="app-main collapsible">
             <ExtractView />
+          </main>
+        )}
+        {tab === 'integrate' && (
+          <main className="app-main">
+            <IntegrateView />
           </main>
         )}
       </div>

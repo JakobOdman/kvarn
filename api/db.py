@@ -130,16 +130,39 @@ def update_folder(folder_id: str, user_id: str, changes: dict) -> bool:
 
 
 def get_folder(folder_id: str, user_id: str) -> dict | None:
-    """The folder, or None if it doesn't exist or is someone else's."""
+    """The folder, or None if it doesn't exist or is someone else's. Without its API key's hash."""
     with connect() as con:
-        return con.execute("SELECT * FROM folders WHERE id = %s AND user_id = %s", (folder_id, user_id)).fetchone()
+        folder = con.execute("SELECT * FROM folders WHERE id = %s AND user_id = %s", (folder_id, user_id)).fetchone()
+    if folder:
+        del folder["api_key_hash"]
+    return folder
+
+
+def set_folder_api_key(folder_id: str, user_id: str, key_hash: str | None) -> bool:
+    """A new key (its sha256) replaces the old one; None removes it."""
+    with connect() as con:
+        return con.execute("UPDATE folders SET api_key_hash = %s, api_key_created = %s WHERE id = %s AND user_id = %s",
+                           (key_hash, _now() if key_hash else None, folder_id, user_id)).rowcount > 0
+
+
+def folder_api_key_hash(folder_id: str) -> str | None:
+    with connect() as con:
+        row = con.execute("SELECT api_key_hash FROM folders WHERE id = %s", (folder_id,)).fetchone()
+    return row["api_key_hash"] if row else None
+
+
+def get_live_extraction(folder_id: str) -> dict | None:
+    with connect() as con:
+        return con.execute("SELECT template, tables FROM extractions WHERE folder_id = %s AND live",
+                           (folder_id,)).fetchone()
 
 
 def list_folders(user_id: str) -> list[dict]:
     """The user's folders by name, with the number of documents in each."""
     with connect() as con:
         return con.execute("""
-            SELECT f.id, f.name, f.created, f.template_id, f.auto_extract, count(d.id) AS document_count
+            SELECT f.id, f.name, f.created, f.template_id, f.auto_extract, f.api_key_created,
+                   count(d.id) AS document_count
             FROM folders f LEFT JOIN documents d ON d.folder_id = f.id
             WHERE f.user_id = %s
             GROUP BY f.id ORDER BY lower(f.name)""", (user_id,)).fetchall()

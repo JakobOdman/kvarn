@@ -1,5 +1,10 @@
-export type Tab = 'read' | 'templates' | 'extract'
-export const TABS: Record<Tab, string> = { templates: 'Mallar', read: 'Läsa', extract: 'Extrahera' }
+export type Tab = 'read' | 'templates' | 'extract' | 'integrate'
+export const TABS: Record<Tab, string> = {
+  templates: 'Mallar',
+  read: 'Läsa',
+  extract: 'Extrahera',
+  integrate: 'Integrera',
+}
 
 /** Plain navbar links. The animated mega menu (commit fba4191) can come back when there are subcategories. */
 export function NavMenu({ tab, onNavigate }: { tab: Tab; onNavigate: (tab: Tab) => void }) {

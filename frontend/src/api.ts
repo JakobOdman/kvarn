@@ -157,6 +157,7 @@ export interface Template {
   model: Model
   page_selection: boolean
   rules: Rule[]
+  locked: boolean // finished: can't be changed or deleted until it is unlocked
 }
 
 /** FastAPI errors come as {detail: "..."} or, for validation, {detail: [{msg}, ...]}. */
@@ -191,6 +192,9 @@ export async function deleteTemplate(id: string): Promise<void> {
   const res = await apiFetch(`/templates/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(await errorText(res))
 }
+
+export const lockTemplate = (id: string, locked: boolean): Promise<Template> =>
+  sendJson(`/templates/${id}`, 'PATCH', { locked })
 
 // --- Step 2: extraction ---
 
@@ -334,6 +338,7 @@ export interface Folder {
   created: string
   template_id: string | null
   auto_extract: boolean // read documents go into the folder's live extraction
+  api_key_created: string | null // other systems can read the live extraction with the folder's key
   document_count: number
 }
 
@@ -360,6 +365,10 @@ export const updateFolder = (
   id: string,
   changes: { template_id?: string | null; auto_extract?: boolean },
 ): Promise<Folder> => sendJson(`/folders/${id}`, 'PATCH', changes)
+/** A new API key for the folder; the old one stops working. The key is only shown this once. */
+export const createApiKey = (folderId: string): Promise<{ key: string }> =>
+  sendJson(`/folders/${folderId}/api-key`, 'POST')
+export const deleteApiKey = (folderId: string): Promise<void> => sendJson(`/folders/${folderId}/api-key`, 'DELETE')
 /** Run every read document again with the folder's template as it is now. */
 export const restartLiveExtraction = (folderId: string): Promise<{ extraction_id: string | null }> =>
   sendJson(`/folders/${folderId}/live`, 'POST')

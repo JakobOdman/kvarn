@@ -72,6 +72,9 @@ ALTER TABLE folders ADD COLUMN IF NOT EXISTS template_id TEXT;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS auto_extract BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE extractions ADD COLUMN IF NOT EXISTS live BOOLEAN NOT NULL DEFAULT false;
 CREATE UNIQUE INDEX IF NOT EXISTS extractions_live ON extractions (folder_id) WHERE live;
+-- The folder's API key, for reading its live extraction from other systems. Only its sha256 is kept.
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS api_key_hash TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS api_key_created TEXT;
 
 CREATE INDEX IF NOT EXISTS folders_user ON folders (user_id);
 CREATE INDEX IF NOT EXISTS documents_folder ON documents (folder_id);

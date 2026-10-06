@@ -5,8 +5,10 @@ Run:
   uvicorn api.main:app --reload     # everything under /api, docs at http://localhost:8000/api/docs
 """
 import hashlib
+import hmac
 import mimetypes
 import os
+import secrets
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -20,7 +22,8 @@ from api import db, jobs, limits, llm, storage
 from api.auth import user_from_token
 from api.checks import run_checks
 from api.layout import layout_text
-from api.templates import Template, delete_template, list_templates, load_template, save_template
+from api.templates import (Locked, Template, delete_template, list_templates, load_template, save_template,
+                           set_locked)
 from read_document import DEFAULT_MODEL
 
 app = FastAPI(title="Kvarn", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -107,6 +110,23 @@ async def restart_live_extraction(folder_id: str, user: dict = Depends(current_u
     if not folder["template_id"]:
         raise HTTPException(400, "Samlingen har ingen mall.")
     return {"extraction_id": await start_live_extraction(folder)}
+
+
+@api.post("/folders/{folder_id}/api-key")
+async def create_api_key(folder_id: str, user: dict = Depends(current_user)):
+    """A new API key for reading the folder's live extraction from other systems. The old one stops working.
+    Returns {"key"}: shown this once, only its sha256 is kept."""
+    key = "kvarn_" + secrets.token_urlsafe(32)
+    if not db.set_folder_api_key(folder_id, user["id"], hashlib.sha256(key.encode()).hexdigest()):
+        raise HTTPException(404, "Unknown folder")
+    return {"key": key}
+
+
+@api.delete("/folders/{folder_id}/api-key")
+async def delete_api_key(folder_id: str, user: dict = Depends(current_user)):
+    if not db.set_folder_api_key(folder_id, user["id"], None):
+        raise HTTPException(404, "Unknown folder")
+    return {"deleted": folder_id}
 
 
 async def start_live_extraction(folder: dict) -> str | None:
@@ -267,14 +287,36 @@ async def put_template(template: Template, user: dict = Depends(current_user)):
         saved = save_template(template, user["id"])
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except Locked:
+        raise HTTPException(409, LOCKED)
     if saved is None:
         raise HTTPException(404, "Unknown template")
     return saved
 
 
+LOCKED = "Mallen är låst. Lås upp den för att ändra den."
+
+
+class LockRequest(BaseModel):
+    locked: bool
+
+
+@api.patch("/templates/{template_id}")
+async def lock_template(template_id: str, request: LockRequest, user: dict = Depends(current_user)):
+    """Lock a finished template, or unlock it to change it. Returns the template."""
+    template = set_locked(template_id, user["id"], request.locked)
+    if template is None:
+        raise HTTPException(404, "Unknown template")
+    return template
+
+
 @api.delete("/templates/{template_id}")
 async def remove_template(template_id: str, user: dict = Depends(current_user)):
-    if not delete_template(template_id, user["id"]):
+    try:
+        deleted = delete_template(template_id, user["id"])
+    except Locked:
+        raise HTTPException(409, LOCKED)
+    if not deleted:
         raise HTTPException(404, "Unknown template")
     return {"deleted": template_id}
 
@@ -323,7 +365,9 @@ def template_changed(extraction: dict, user_id: str) -> bool:
     """A live extraction keeps the template it started with: has the folder's template changed since?"""
     folder = db.get_folder(extraction["folder_id"], user_id)
     current = load_template(folder["template_id"], user_id) if folder and folder["template_id"] else None
-    return current is None or current.model_dump() != Template.model_validate(extraction["template"]).model_dump()
+    lock = {"locked"}  # locking is not a change
+    return current is None or (current.model_dump(exclude=lock)
+                               != Template.model_validate(extraction["template"]).model_dump(exclude=lock))
 
 
 @api.get("/extractions/{extraction_id}")
@@ -374,6 +418,44 @@ async def get_config(user: dict = Depends(current_user)):
     return {"paid": llm.paid_allowed(), "spent": round(db.Meter(user["id"]).spent(), 2), "budget": limits.MONTHLY_USD}
 
 
+# --- For other systems: a folder's live extraction, with the folder's API key ---
+
+public = APIRouter()
+
+
+def live_tables(folder_id: str, request: Request) -> dict:
+    """The folder's live extraction, if the request has the folder's key in "Authorization: Bearer kvarn_...".
+    A wrong key and an unknown folder give the same 401."""
+    scheme, _, key = request.headers.get("authorization", "").partition(" ")
+    stored = db.folder_api_key_hash(folder_id)
+    given = hashlib.sha256(key.encode()).hexdigest()
+    if scheme.lower() != "bearer" or not stored or not hmac.compare_digest(stored, given):
+        raise HTTPException(401, "Fel eller saknad API-nyckel.")
+    extraction = db.get_live_extraction(folder_id)
+    if extraction is None:
+        raise HTTPException(404, "Samlingen har ingen aktuell tabell. Slå på Extrahera automatiskt i Kvarn.")
+    return extraction
+
+
+@public.get("/folders/{folder_id}/tables")
+async def public_tables(folder_id: str, request: Request):
+    """The names of the live extraction's tables."""
+    return [t["name"] for t in live_tables(folder_id, request)["template"]["tables"]]
+
+
+@public.get("/folders/{folder_id}/tables/{table}")
+async def public_table(folder_id: str, table: str, request: Request):
+    """The table's rows: dokument, the template's fields, sida. The same columns as the Excel file."""
+    extraction = live_tables(folder_id, request)
+    template = Template.model_validate(extraction["template"])
+    found = next((t for t in template.tables if t.name == table), None)
+    if found is None:
+        raise HTTPException(404, f"Tabellen {table} finns inte.")
+    columns = ["dokument", *(f.name for f in found.fields), "sida"]
+    return [{c: row.get(c) for c in columns} for row in extraction["tables"].get(table, [])]
+
+
+app.include_router(public, prefix="/api/public")
 app.include_router(api, prefix="/api")
 
 # The website on / and the app on /app/, built by Vite (on Vercel by the build script in pyproject.toml, which

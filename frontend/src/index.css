@@ -1570,3 +1570,143 @@ p.none {
 .live-changed button {
   flex: none;
 }
+
+/* A locked template */
+.template-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: grid;
+}
+
+.template-fields:disabled input,
+.template-fields:disabled textarea,
+.template-fields:disabled select {
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.locked-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.locked-icon {
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  color: var(--muted);
+}
+
+/* The folder's API key */
+.api-key {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.api-key p {
+  margin: 0;
+}
+
+.api-key code {
+  font: 400 12px var(--mono);
+}
+
+.api-key .item-actions {
+  align-items: center;
+  margin-top: 0;
+}
+
+.api-key .spacer {
+  flex: 1;
+}
+
+.copy {
+  display: flex;
+  gap: 6px;
+}
+
+.copy input {
+  flex: 1;
+  min-width: 0;
+  font: 400 12px var(--mono);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.copy button {
+  flex: none;
+}
+
+.integrate {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.integrate h2 {
+  margin: 0;
+}
+
+.integrate .api-key {
+  gap: 10px;
+  margin-top: 0;
+}
+
+.api-tables {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.api-tables li {
+  display: grid;
+  gap: 6px;
+  padding: 4px 0 6px;
+}
+
+.api-table {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  font: 400 14px var(--sans);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.api-table:hover {
+  background: var(--surface);
+}
+
+.api-table svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+.api-tables li.open .api-table svg {
+  transform: rotate(90deg);
+}
+
+.api-table .queue-meta {
+  margin: 0 0 0 auto;
+}
+
+.api-tables .copy {
+  margin-left: 30px;
+}
