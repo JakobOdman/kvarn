@@ -1,4 +1,4 @@
-import { ChevronDown, Table2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Table2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { Extraction, Template, TemplateField, TemplateTable } from '../api'
 
@@ -13,10 +13,49 @@ const isEmpty = (v: unknown) => v === null || v === '' || (typeof v === 'string'
 const isNumber = (v: unknown) =>
   typeof v === 'number' || (typeof v === 'string' && /^[(\-–−]?[\d\s.,]+%?\)?$/.test(v.trim()) && /\d/.test(v))
 
-function Value({ field, value }: { field: TemplateField; value: Row[string] }) {
+/** "12 500,5", "1,234.5", "(300)", "10.8%" -> number, like toNumber in checks.py. null when it is not one. */
+function toNumber(v: unknown): number | null {
+  if (typeof v === 'number') return v
+  if (typeof v !== 'string' || !isNumber(v)) return null
+  let s = v.trim()
+  const negative = /^\(.*\)$/.test(s) || /^[-–−]/.test(s)
+  s = s.replace(/[()%\s\-–−]/g, '')
+  if (s.includes(',') && s.includes('.')) s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '')
+  else if ((s.match(/[.,]/g) ?? []).length > 1) s = s.replace(/[.,]/g, '')
+  else if (/^\d+,\d{3}$/.test(s)) s = s.replace(',', '') // 1,234 is a thousand separator
+  else s = s.replace(',', '.')
+  const n = Number(s)
+  return Number.isNaN(n) ? null : negative ? -n : n
+}
+
+const numberFormat = new Intl.NumberFormat('sv-SE', { maximumFractionDigits: 3 })
+
+function Value({ field, value, numeric }: { field: TemplateField; value: Row[string]; numeric: boolean }) {
   if (value === null || value === '') return <span className="none">–</span>
   if (field.type === 'choice') return <span className="badge">{value}</span>
+  const n = numeric ? toNumber(value) : null
+  if (n !== null) return <>{numberFormat.format(n)}{String(value).trim().endsWith('%') ? ' %' : ''}</>
   return <>{value}</>
+}
+
+/** "06.2, Övergripande tjänstekrav 2026-04-13.pdf" -> "06.2, Övergripande tjänstekrav 2026-04-13" */
+const shortName = (name: string) => name.replace(/\.(pdf|docx?|xlsx?|pptx?|txt|png|jpe?g|heic)$/i, '')
+
+type Sort = { column: string; dir: 1 | -1 } | null
+
+/** Numbers as numbers, text in Swedish order with 2 before 10, empty values last whichever way. */
+function sortRows(rows: Row[], sort: Sort, numeric: Set<string>): Row[] {
+  if (!sort) return rows
+  const key = (r: Row) => (numeric.has(sort.column) ? toNumber(r[sort.column]) : r[sort.column])
+  return [...rows].sort((a, b) => {
+    const x = key(a)
+    const y = key(b)
+    if (isEmpty(x) || x === undefined) return isEmpty(y) || y === undefined ? 0 : 1
+    if (isEmpty(y) || y === undefined) return -1
+    const order =
+      typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'sv', { numeric: true })
+    return order * sort.dir
+  })
 }
 
 function downloadCsv(name: string, columns: string[], rows: Row[]) {
@@ -56,6 +95,7 @@ function Rows({
   filters: Filters
   onFilter: (column: string, value: string) => void
 }) {
+  const [sort, setSort] = useState<Sort>(null)
   // A column is numeric if every filled-in value in it is
   const numeric = new Set(
     table.fields
@@ -65,6 +105,33 @@ function Rows({
       )
       .map((f) => f.name),
   )
+  numeric.add('sida')
+  // Long text (descriptions, requirements) wraps at a readable width; short values stay on one line
+  const long = new Set(
+    table.fields
+      .filter((f) => !numeric.has(f.name) && f.type !== 'choice')
+      .filter((f) => {
+        const lengths = rows.map((r) => String(r[f.name] ?? '').length).filter((n) => n > 0)
+        return lengths.length > 0 && lengths.reduce((a, b) => a + b, 0) / lengths.length > 40
+      })
+      .map((f) => f.name),
+  )
+  const sorted = sortRows(shown, sort, numeric)
+  // Ascending, descending, then back to the documents' own order
+  const toggle = (column: string) =>
+    setSort(sort?.column !== column ? { column, dir: 1 } : sort.dir === 1 ? { column, dir: -1 } : null)
+  const heading = (column: string, text: string, title?: string) => (
+    <th
+      key={column}
+      title={title}
+      className={`sortable ${numeric.has(column) ? 'num' : ''} ${sort?.column === column ? 'sorted' : ''}`}
+      onClick={() => toggle(column)}
+      aria-sort={sort?.column === column ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
+    >
+      {text}
+      {sort?.column === column && (sort.dir === 1 ? <ArrowUp /> : <ArrowDown />)}
+    </th>
+  )
   return (
     <div className="result-table">
       {rows.length > 0 ? (
@@ -72,18 +139,15 @@ function Rows({
           <table>
             <thead>
               <tr>
-                <th>Dokument</th>
-                {table.fields.map((f) => (
-                  <th key={f.name} title={f.description} className={numeric.has(f.name) ? 'num' : ''}>
-                    {label(f.name)}
-                  </th>
-                ))}
-                <th className="num">Sida</th>
+                {heading('dokument', 'Dokument')}
+                {table.fields.map((f) => heading(f.name, label(f.name), f.description))}
+                {heading('sida', 'Sida')}
               </tr>
               <tr className="filters">
                 {['dokument', ...table.fields.map((f) => f.name), 'sida'].map((c) => (
                   <th key={c}>
                     <select
+                      className={filters[c] ? 'active' : ''}
                       value={filters[c] ?? ''}
                       onChange={(e) => onFilter(c, e.target.value)}
                       aria-label={`Filtrera ${label(c)}`}
@@ -105,12 +169,14 @@ function Rows({
                   </td>
                 </tr>
               )}
-              {shown.map((row, i) => (
+              {sorted.map((row, i) => (
                 <tr key={i} className={flagged.has(row) ? 'flagged' : ''}>
-                  <td>{row.dokument}</td>
+                  <td className="doc" title={String(row.dokument ?? '')}>
+                    {shortName(String(row.dokument ?? ''))}
+                  </td>
                   {table.fields.map((f) => (
-                    <td key={f.name} className={numeric.has(f.name) ? 'num' : ''}>
-                      <Value field={f} value={row[f.name]} />
+                    <td key={f.name} className={numeric.has(f.name) ? 'num' : long.has(f.name) ? 'long' : ''}>
+                      <Value field={f} value={row[f.name]} numeric={numeric.has(f.name)} />
                     </td>
                   ))}
                   <td className="num">{row.sida ?? <span className="none">–</span>}</td>
