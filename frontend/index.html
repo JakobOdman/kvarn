@@ -597,7 +597,7 @@
 
       .steps {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 28px;
         margin-top: 56px;
       }
@@ -621,6 +621,36 @@
       .step p {
         font-size: 15px;
         margin: 0;
+      }
+
+      /* Example API call */
+      .api {
+        min-width: 0; /* the code scrolls sideways on a phone instead of widening the page */
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #fffdf8;
+        overflow: hidden;
+        box-shadow: 0 30px 60px -32px rgba(42, 29, 21, 0.3);
+      }
+
+      .api pre {
+        margin: 0;
+        padding: 22px;
+        overflow-x: auto;
+        font: 400 13px/1.6 var(--mono);
+        color: var(--ink);
+      }
+
+      .api .dim {
+        color: var(--muted);
+      }
+
+      .api .key {
+        color: #8a5a00;
+      }
+
+      .api .str {
+        color: #2f7a46;
       }
 
       /* Example result */
@@ -824,6 +854,12 @@
         }
       }
 
+      @media (max-width: 1100px) {
+        .steps {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
       @media (max-width: 860px) {
         .nav-links {
           display: none;
@@ -859,6 +895,7 @@
         <div class="nav-links">
           <a href="#sa-funkar-det">Så funkar det</a>
           <a href="#kontroller">Kontroller</a>
+          <a href="#integrera">Integrera</a>
           <a href="#for-vem">För vem</a>
         </div>
         <a class="nav-login" href="/app/">Logga in</a>
@@ -972,7 +1009,7 @@
       <div class="wrap">
         <div class="reveal">
           <span class="label">Så funkar det</span>
-          <h2>Tre steg. Sedan <em>mals</em> det ner.</h2>
+          <h2>Fyra steg. Sedan <em>mals</em> det ner.</h2>
           <p>Du beskriver en gång vad du vill ha ut. Sedan kör du det på hur många dokument som helst.</p>
         </div>
         <div class="steps reveal">
@@ -989,7 +1026,12 @@
           <div class="step">
             <span class="num">03</span>
             <h3>Få tabellerna.</h3>
-            <p>En rad per sak, med dokument och sida. Ladda ner som Excel eller CSV.</p>
+            <p>En rad per sak, med dokument och sida. Kontrollerade och klara att ladda ner som Excel.</p>
+          </div>
+          <div class="step">
+            <span class="num">04</span>
+            <h3>Koppla på.</h3>
+            <p>Nya dokument körs när de kommer in, så tabellen alltid är aktuell. Andra system hämtar den via API.</p>
           </div>
         </div>
 
@@ -1039,6 +1081,39 @@
       </div>
     </section>
 
+    <section id="integrera">
+      <div class="wrap split">
+        <div class="reveal">
+          <span class="label">Integrera</span>
+          <h2>Alltid <em>nymalet.</em></h2>
+          <p>
+            Slå på Extrahera automatiskt så håller Kvarn samlingens tabell aktuell. Nya dokument körs när de läses in,
+            och en ny version ersätter den gamla. Andra system hämtar tabellen som JSON med samlingens API-nyckel.
+          </p>
+        </div>
+        <div class="api reveal" aria-label="Exempel på ett API-anrop">
+          <div class="mock-head">
+            <b>Exempelfond AB</b>
+            <span class="label">Innehav · aktuell</span>
+            <span class="ok">● 200</span>
+          </div>
+          <pre><span class="dim">GET</span> /api/public/folders/…/tables/innehav
+<span class="dim">Authorization:</span> Bearer kvarn_…
+
+[
+  { <span class="key">"dokument"</span>: <span class="str">"rapport-q3.pdf"</span>,
+    <span class="key">"bolag"</span>: <span class="str">"Nordljus AB"</span>,
+    <span class="key">"verkligt_varde"</span>: <span class="str">"18 950 000"</span>,
+    <span class="key">"sida"</span>: 11 },
+  { <span class="key">"dokument"</span>: <span class="str">"rapport-q3.pdf"</span>,
+    <span class="key">"bolag"</span>: <span class="str">"Saltsjö Health"</span>,
+    <span class="key">"verkligt_varde"</span>: <span class="str">"31 200 000"</span>,
+    <span class="key">"sida"</span>: 11 }
+]</pre>
+        </div>
+      </div>
+    </section>
+
     <section class="tint" id="for-vem">
       <div class="wrap">
         <div class="reveal">
@@ -1049,7 +1124,7 @@
           <div class="card"><h3>Investerare</h3><p>Portföljbolag, värderingar och nyckeltal ur förvaltarnas kvartalsrapporter.</p></div>
           <div class="card"><h3>Anbud</h3><p>Skall-krav, viten, mängder och prisposter ur förfrågningsunderlaget.</p></div>
           <div class="card"><h3>Ekonomi</h3><p>Fakturor, avtal och underlag till tabeller du kan stämma av.</p></div>
-          <div class="card"><h3>Utvecklare</h3><p>Mallar och tabeller via API, rakt in i er egen pipeline.</p></div>
+          <div class="card"><h3>Utvecklare</h3><p>Samlingens aktuella tabell som JSON, rakt in i er egen pipeline.</p></div>
         </div>
       </div>
     </section>
