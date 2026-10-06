@@ -9,6 +9,7 @@ import {
   listFolders,
   listJobs,
   listTemplates,
+  restartLiveExtraction,
   getConfig,
   type Extraction,
   type ExtractionSummary,
@@ -47,7 +48,7 @@ export function ExtractView() {
     })
     listFolders().then((f) => {
       setFolders(f)
-      if (f.length) setFolderId((id) => id || f[0].id)
+      if (f.length) chooseFolder(f[0])
     })
     getConfig().then((c) => {
       setPaid(c.paid)
@@ -66,11 +67,42 @@ export function ExtractView() {
     })
   }, [folderId])
 
+  /** The folder's own template, if it has one, is chosen with it. */
+  function chooseFolder(folder: Folder) {
+    setFolderId(folder.id)
+    if (folder.template_id) setTemplateId(folder.template_id)
+  }
+
   async function openEarlier(id: string) {
     setError(null)
-    setExtractionId(id)
-    setExtraction(await getExtraction(id))
     setCollapsed(true)
+    await follow(id)
+  }
+
+  /** Show the extraction, and keep it up to date while it runs. */
+  async function follow(id: string) {
+    setExtractionId(id)
+    let e = await getExtraction(id)
+    while (e.status === 'queued' || e.status === 'running') {
+      setExtraction(e)
+      await new Promise((r) => setTimeout(r, 1000))
+      e = await getExtraction(id)
+    }
+    setExtraction(e)
+    setHistory(await listExtractions())
+    setSpending(await getConfig())
+  }
+
+  async function runAgain(e: Extraction) {
+    if (!confirm('Köra om alla dokument i samlingen med mallen som den är nu? Det kostar.')) return
+    setError(null)
+    try {
+      const { extraction_id } = await restartLiveExtraction(e.folder_id!)
+      if (extraction_id) await follow(extraction_id)
+      else setHistory(await listExtractions())
+    } catch (err) {
+      setError((err as Error).message)
+    }
   }
 
   async function removeEarlier(h: ExtractionSummary) {
@@ -95,16 +127,7 @@ export function ExtractView() {
     setError(null)
     try {
       const id = await createExtraction(templateId, folderId, [...checked], asPaid)
-      setExtractionId(id)
-      let e = await getExtraction(id)
-      while (e.status === 'queued' || e.status === 'running') {
-        setExtraction(e)
-        await new Promise((r) => setTimeout(r, 1000))
-        e = await getExtraction(id)
-      }
-      setExtraction(e)
-      setHistory(await listExtractions())
-      setSpending(await getConfig())
+      await follow(id)
       setCollapsed(true)
     } catch (e) {
       setError((e as Error).message)
@@ -134,7 +157,7 @@ export function ExtractView() {
         <section className="card extract-setup">
           <span className="caps">Samling</span>
           {folders.length ? (
-            <select value={folderId} onChange={(e) => setFolderId(e.target.value)}>
+            <select value={folderId} onChange={(e) => chooseFolder(folders.find((f) => f.id === e.target.value)!)}>
               {folders.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.name}
@@ -232,7 +255,7 @@ export function ExtractView() {
             <span className="caps">Tidigare körningar</span>
             <ul className="queue">
               {groupRuns(history).map(([latest, ...older]) => {
-                const key = `${latest.folder_id}/${latest.template_id}`
+                const key = latest.live ? `live/${latest.id}` : `${latest.folder_id}/${latest.template_id}`
                 const open = expanded.has(key)
                 return [
                   <EarlierRun
@@ -271,7 +294,10 @@ export function ExtractView() {
           <div className="document-head">
             <div>
               <h2>{extractionFolder?.name ?? 'Utan samling'}</h2>
-              <p className="result-folder">{template.name}</p>
+              <p className="result-folder">
+                {template.name}
+                {extraction.live && ' · aktuell tabell'}
+              </p>
               {counted.length > 0 && (
                 <p className="result-tokens">
                   {formatTokens(tokensIn, tokensOut)} tokens{allCached && ' · sparade svar, ingen kostnad'}
@@ -282,6 +308,12 @@ export function ExtractView() {
               <button onClick={() => downloadXlsx(extractionId!, template.id)}>Ladda ner Excel</button>
             )}
           </div>
+          {extraction.template_changed && !running && (
+            <div className="read-warning live-changed">
+              <span>Mallen har ändrats sedan körningen startade. Nya dokument körs fortfarande med den gamla.</span>
+              <button onClick={() => runAgain(extraction)}>Kör om alla</button>
+            </div>
+          )}
           {running && <Progress extraction={extraction} />}
           {!running && <Checks checks={extraction.checks ?? []} />}
           <ResultTables key={extraction.id} template={template} extraction={extraction} />
@@ -294,8 +326,8 @@ export function ExtractView() {
 /** The runs grouped by folder and template, newest first in each group (the list comes newest first). */
 function groupRuns(runs: ExtractionSummary[]): ExtractionSummary[][] {
   const groups = new Map<string, ExtractionSummary[]>()
-  for (const r of runs) {
-    const key = `${r.folder_id}/${r.template_id}`
+  for (const r of [...runs.filter((r) => r.live), ...runs.filter((r) => !r.live)]) {
+    const key = r.live ? `live/${r.id}` : `${r.folder_id}/${r.template_id}` // a live run is a group of its own, first
     groups.set(key, [...(groups.get(key) ?? []), r])
   }
   return [...groups.values()]
@@ -320,7 +352,12 @@ function EarlierRun({ run, selected, onOpen, onRemove, older, olderOpen, onToggl
         <span className={`dot ${run.documents.some((d) => d.error) ? 'warn' : run.status}`} />
       </span>
       <div>
-        {!isOlder && <div className="queue-name">{run.folder_name ?? 'Utan samling'}</div>}
+        {!isOlder && (
+          <div className="queue-name">
+            {run.folder_name ?? 'Utan samling'}
+            {run.live && <span className="live-badge">Aktuell</span>}
+          </div>
+        )}
         <div className="queue-meta">
           {!isOlder && `${run.template_name} · `}
           {run.documents.length} dokument · {rows} rader

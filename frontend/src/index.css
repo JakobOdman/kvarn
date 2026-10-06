@@ -290,6 +290,21 @@ code {
 
 /* File queue */
 
+.folder-extract {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.folder-extract select {
+  font: 400 14px var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
 .toggles {
   display: grid;
   gap: 4px;
@@ -1531,4 +1546,27 @@ code {
 p.none {
   margin: 0;
   font-size: 14px;
+}
+
+/* The folder's live extraction */
+.live-badge {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: 500 10px var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.live-changed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.live-changed button {
+  flex: none;
 }

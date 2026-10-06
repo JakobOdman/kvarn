@@ -51,9 +51,16 @@ class FolderRequest(BaseModel):
     name: str
 
 
+class FolderChanges(BaseModel):
+    """Only what is sent is changed. template_id null: no template."""
+    name: str | None = None
+    template_id: str | None = None
+    auto_extract: bool | None = None
+
+
 @api.get("/folders")
 async def list_folders(user: dict = Depends(current_user)):
-    """The user's folders by name: [{"id", "name", "created", "document_count"}]."""
+    """The user's folders by name: [{"id", "name", "created", "template_id", "auto_extract", "document_count"}]."""
     return db.list_folders(user["id"])
 
 
@@ -65,12 +72,55 @@ async def create_folder(request: FolderRequest, user: dict = Depends(current_use
 
 
 @api.patch("/folders/{folder_id}")
-async def rename_folder(folder_id: str, request: FolderRequest, user: dict = Depends(current_user)):
-    if not request.name.strip():
-        raise HTTPException(400, "Samlingen behöver ett namn.")
-    if not db.rename_folder(folder_id, user["id"], request.name.strip()):
+async def update_folder(folder_id: str, request: FolderChanges, user: dict = Depends(current_user)):
+    """Rename, choose a template, turn automatic extraction on or off. Turned on, every read document in the folder
+    is extracted at once into a new live extraction (paid). Turned off, the live one becomes an ordinary one."""
+    folder = db.get_folder(folder_id, user["id"])
+    if folder is None:
         raise HTTPException(404, "Unknown folder")
+    changes = request.model_dump(include=request.model_fields_set)
+    if "name" in changes:
+        changes["name"] = (changes["name"] or "").strip()
+        if not changes["name"]:
+            raise HTTPException(400, "Samlingen behöver ett namn.")
+    if changes.get("template_id") and load_template(changes["template_id"], user["id"]) is None:
+        raise HTTPException(404, "Unknown template")
+    was_on = folder["auto_extract"]
+    folder |= changes
+    if folder["auto_extract"] and not folder["template_id"]:
+        raise HTTPException(400, "Välj en mall för att extrahera automatiskt.")
+    db.update_folder(folder_id, user["id"], changes)
+    if was_on and not folder["auto_extract"]:
+        db.end_live_extraction(folder_id)
+    elif folder["auto_extract"] and not was_on:
+        await start_live_extraction(folder)
     return db.get_folder(folder_id, user["id"])
+
+
+@api.post("/folders/{folder_id}/live")
+async def restart_live_extraction(folder_id: str, user: dict = Depends(current_user)):
+    """Run every read document in the folder again with its template as it is now, into a new live extraction
+    (paid). The old one becomes an ordinary one. Returns {"extraction_id"}, null when there is nothing to run."""
+    folder = db.get_folder(folder_id, user["id"])
+    if folder is None:
+        raise HTTPException(404, "Unknown folder")
+    if not folder["template_id"]:
+        raise HTTPException(400, "Samlingen har ingen mall.")
+    return {"extraction_id": await start_live_extraction(folder)}
+
+
+async def start_live_extraction(folder: dict) -> str | None:
+    template = load_template(folder["template_id"], folder["user_id"])
+    docs = [d for d in reversed(db.list_documents(folder["user_id"], folder["id"])) if d["status"] == "done" and d["ok"]]
+    if template is None or not docs:
+        db.end_live_extraction(folder["id"])  # the next read document starts one
+        return None
+    extraction_id = uuid4().hex
+    documents = [{"job_id": d["id"], "name": d["name"], "status": "queued", "error": None} for d in docs]
+    db.add_extraction(extraction_id, template.model_dump(), documents, folder["id"], folder["user_id"], live=True)
+    for d in docs:
+        await jobs.enqueue("extract", {"extraction_id": extraction_id, "job_id": d["id"], "paid": True})
+    return extraction_id
 
 
 @api.delete("/folders/{folder_id}")
@@ -263,20 +313,30 @@ async def create_extraction(request: ExtractionRequest, user: dict = Depends(cur
 
 @api.get("/extractions")
 async def list_extractions(user: dict = Depends(current_user)):
-    """The user's earlier runs, newest first: [{"id", "template_id", "template_name", "created", "status", "documents", "row_counts"}]."""
-    return db.list_extractions(user["id"])
+    """The user's earlier runs, newest first: [{"id", "template_id", "template_name", "created", "status", "documents",
+    "row_counts", "live", "template_changed"}]."""
+    return [e | {"template_changed": e["live"] and template_changed(db.get_extraction(e["id"]), user["id"])}
+            for e in db.list_extractions(user["id"])]
+
+
+def template_changed(extraction: dict, user_id: str) -> bool:
+    """A live extraction keeps the template it started with: has the folder's template changed since?"""
+    folder = db.get_folder(extraction["folder_id"], user_id)
+    current = load_template(folder["template_id"], user_id) if folder and folder["template_id"] else None
+    return current is None or current.model_dump() != Template.model_validate(extraction["template"]).model_dump()
 
 
 @api.get("/extractions/{extraction_id}")
 async def get_extraction(extraction_id: str, user: dict = Depends(current_user)):
     """Return {"id", "status", "template_id", "template", "created", "documents": [{job_id, name, status, error}],
-    "tables": {name: rows}, "checks": [...]}. template is the template as it was when the extraction ran;
-    checks are its rules counted on the rows (checks.py)."""
+    "tables": {name: rows}, "checks": [...], "live", "template_changed"}. template is the template as it was when
+    the extraction ran; checks are its rules counted on the rows (checks.py)."""
     extraction = db.get_extraction(extraction_id, user["id"])
     if extraction is None:
         raise HTTPException(404, "Unknown extraction")
     template = Template.model_validate(extraction["template"])
-    return extraction | {"checks": run_checks(template, extraction)}
+    return extraction | {"checks": run_checks(template, extraction),
+                         "template_changed": extraction["live"] and template_changed(extraction, user["id"])}
 
 
 @api.delete("/extractions/{extraction_id}")

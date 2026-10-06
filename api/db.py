@@ -120,10 +120,13 @@ def add_folder(name: str, user_id: str) -> dict:
     return folder
 
 
-def rename_folder(folder_id: str, user_id: str, name: str) -> bool:
+def update_folder(folder_id: str, user_id: str, changes: dict) -> bool:
+    """changes: any of name, template_id, auto_extract."""
+    changes = {k: v for k, v in changes.items() if k in ("name", "template_id", "auto_extract")}
+    sets = ", ".join(f"{k} = %({k})s" for k in changes) or "name = name"
     with connect() as con:
-        return con.execute("UPDATE folders SET name = %s WHERE id = %s AND user_id = %s",
-                           (name, folder_id, user_id)).rowcount > 0
+        return con.execute(f"UPDATE folders SET {sets} WHERE id = %(id)s AND user_id = %(user)s",
+                           changes | {"id": folder_id, "user": user_id}).rowcount > 0
 
 
 def get_folder(folder_id: str, user_id: str) -> dict | None:
@@ -136,7 +139,7 @@ def list_folders(user_id: str) -> list[dict]:
     """The user's folders by name, with the number of documents in each."""
     with connect() as con:
         return con.execute("""
-            SELECT f.id, f.name, f.created, count(d.id) AS document_count
+            SELECT f.id, f.name, f.created, f.template_id, f.auto_extract, count(d.id) AS document_count
             FROM folders f LEFT JOIN documents d ON d.folder_id = f.id
             WHERE f.user_id = %s
             GROUP BY f.id ORDER BY lower(f.name)""", (user_id,)).fetchall()
@@ -148,6 +151,7 @@ def delete_folder(folder_id: str, user_id: str) -> bool:
         if con.execute("SELECT 1 FROM folders WHERE id = %s AND user_id = %s", (folder_id, user_id)).fetchone() is None:
             return False
         doc_ids = [r["id"] for r in con.execute("SELECT id FROM documents WHERE folder_id = %s", (folder_id,))]
+    end_live_extraction(folder_id)  # kept with its rows, like the other extractions
     for doc_id in doc_ids:
         delete_document(doc_id)
     with connect() as con:
@@ -190,11 +194,12 @@ def delete_document(doc_id: str) -> bool:
     """Remove the document, and its file if the owner has no other document with the same one.
     False if it didn't exist."""
     with connect() as con:
-        row = con.execute("SELECT d.sha256, f.user_id FROM documents d JOIN folders f ON f.id = d.folder_id "
-                          "WHERE d.id = %s", (doc_id,)).fetchone()
+        row = con.execute("SELECT d.sha256, d.name, d.folder_id, f.user_id FROM documents d "
+                          "JOIN folders f ON f.id = d.folder_id WHERE d.id = %s", (doc_id,)).fetchone()
         if row is None:
             return False
         con.execute("DELETE FROM documents WHERE id = %s", (doc_id,))
+        _remove_from_live_extraction(con, row["folder_id"], doc_id, row["name"])
         still_used = con.execute("SELECT 1 FROM documents d JOIN folders f ON f.id = d.folder_id "
                                  "WHERE d.sha256 = %s AND f.user_id = %s", (row["sha256"], row["user_id"])).fetchone()
     if not still_used:
@@ -222,14 +227,58 @@ def list_documents(user_id: str, folder_id: str | None = None) -> list[dict]:
 
 # --- Extractions ---
 
-def add_extraction(extraction_id: str, template: dict, documents: list[dict], folder_id: str | None, user_id: str):
-    """template is the whole template as it was at the run, so the result can always be traced to its prompt."""
+def add_extraction(extraction_id: str, template: dict, documents: list[dict], folder_id: str | None, user_id: str,
+                   live: bool = False):
+    """template is the whole template as it was at the run, so the result can always be traced to its prompt.
+    live: the folder's live extraction, which documents are added to as they are read. An earlier live one
+    becomes an ordinary extraction."""
     tables = {t["name"]: [] for t in template["tables"]}
     with connect() as con:
+        if live:
+            con.execute("UPDATE extractions SET live = false WHERE folder_id = %s AND live", (folder_id,))
         con.execute("INSERT INTO extractions (id, template_id, template, created, status, documents, tables, folder_id, "
-                    "user_id) VALUES (%s, %s, %s, %s, 'queued', %s, %s, %s, %s)",
+                    "user_id, live) VALUES (%s, %s, %s, %s, 'queued', %s, %s, %s, %s, %s)",
                     (extraction_id, template["id"], Jsonb(template), _now(), Jsonb(documents), Jsonb(tables),
-                     folder_id, user_id))
+                     folder_id, user_id, live))
+
+
+def end_live_extraction(folder_id: str):
+    """The folder's live extraction becomes an ordinary one."""
+    with connect() as con:
+        con.execute("UPDATE extractions SET live = false WHERE folder_id = %s AND live", (folder_id,))
+
+
+def add_to_live_extraction(folder: dict, job_id: str, name: str, template: dict) -> str | None:
+    """Add a read document to the folder's live extraction, started with template if there is none.
+    Returns the extraction's id, or None if the document is in it already (the read job came twice)."""
+    with connect() as con:
+        # Two documents read at the same time: only one of them starts it
+        con.execute("INSERT INTO extractions (id, template_id, template, created, status, documents, tables, folder_id, "
+                    "user_id, live) VALUES (%s, %s, %s, %s, 'queued', '[]', %s, %s, %s, true) "
+                    "ON CONFLICT (folder_id) WHERE live DO NOTHING",
+                    (uuid4().hex, template["id"], Jsonb(template), _now(),
+                     Jsonb({t["name"]: [] for t in template["tables"]}), folder["id"], folder["user_id"]))
+        extraction = con.execute("SELECT id, documents FROM extractions WHERE folder_id = %s AND live FOR UPDATE",
+                                 (folder["id"],)).fetchone()
+        if any(d["job_id"] == job_id for d in extraction["documents"]):
+            return None
+        documents = extraction["documents"] + [{"job_id": job_id, "name": name, "status": "queued", "error": None}]
+        con.execute("UPDATE extractions SET status = 'running', documents = %s WHERE id = %s",
+                    (Jsonb(documents), extraction["id"]))
+    return extraction["id"]
+
+
+def _remove_from_live_extraction(con, folder_id: str, job_id: str, name: str):
+    """A removed document leaves the folder's live extraction, with its rows."""
+    extraction = con.execute("SELECT id, documents, tables FROM extractions WHERE folder_id = %s AND live FOR UPDATE",
+                             (folder_id,)).fetchone()
+    if extraction is None:
+        return
+    documents = [d for d in extraction["documents"] if d["job_id"] != job_id]
+    tables = {t: [r for r in rows if r.get("dokument") != name] for t, rows in extraction["tables"].items()}
+    status = "done" if all(d["status"] in ("done", "error") for d in documents) else "running"
+    con.execute("UPDATE extractions SET status = %s, documents = %s, tables = %s WHERE id = %s",
+                (status, Jsonb(documents), Jsonb(tables), extraction["id"]))
 
 
 def update_extraction(extraction_id: str, status: str, documents: list[dict], tables: dict):
@@ -294,7 +343,7 @@ def list_extractions(user_id: str) -> list[dict]:
     """The user's extractions, newest first, without the rows: template name, documents and rows per table."""
     with connect() as con:
         rows = con.execute("""
-            SELECT e.id, e.template_id, e.template ->> 'name' AS template_name, e.created, e.status,
+            SELECT e.id, e.template_id, e.template ->> 'name' AS template_name, e.created, e.status, e.live,
                    e.documents, e.folder_id, f.name AS folder_name,
                    (SELECT jsonb_object_agg(key, jsonb_array_length(value)) FROM jsonb_each(e.tables)) AS row_counts
             FROM extractions e LEFT JOIN folders f ON f.id = e.folder_id

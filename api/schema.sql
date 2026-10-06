@@ -66,6 +66,13 @@ CREATE TABLE IF NOT EXISTS usage (
     PRIMARY KEY (user_id, month)
 );
 
+-- Added later. A folder's template, and whether its documents are extracted as soon as they are read, into the
+-- folder's live extraction (at most one per folder)
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS template_id TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS auto_extract BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE extractions ADD COLUMN IF NOT EXISTS live BOOLEAN NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS extractions_live ON extractions (folder_id) WHERE live;
+
 CREATE INDEX IF NOT EXISTS folders_user ON folders (user_id);
 CREATE INDEX IF NOT EXISTS documents_folder ON documents (folder_id);
 CREATE INDEX IF NOT EXISTS extractions_user ON extractions (user_id);

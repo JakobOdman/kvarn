@@ -4,6 +4,7 @@ jobs.py - start background work (work.py) without waiting for it.
 On Vercel (VERCEL=1, set by Vercel): a message to Vercel Queues, picked up by workers.py in a function of its own.
 Locally: a thread, like FastAPI's BackgroundTasks. In the tests: right away, so they can check the result.
 """
+import asyncio
 import os
 import threading
 
@@ -16,6 +17,14 @@ async def enqueue(topic: str, payload: dict):
     if os.environ.get("VERCEL"):
         from vercel.queue import send  # only on Vercel
         await send(topic, payload)
+    else:
+        enqueue_from_job(topic, payload)
+
+
+def enqueue_from_job(topic: str, payload: dict):
+    """The same, from a job: it runs in a thread of its own, without an event loop."""
+    if os.environ.get("VERCEL"):
+        asyncio.run(enqueue(topic, payload))
     elif INLINE:
         work.HANDLERS[topic](payload)
     else:

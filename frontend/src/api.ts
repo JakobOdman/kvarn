@@ -232,6 +232,8 @@ export interface Extraction {
     cached?: boolean // the answer came from the cache: no cost this time
   }[]
   tables: Record<string, Record<string, string | number | null>[]>
+  live: boolean // the folder's live extraction: read documents are added as they are read
+  template_changed: boolean // live, and the folder's template has changed since it started
   checks: Check[]
 }
 
@@ -257,6 +259,8 @@ export interface ExtractionSummary {
   folder_id: string | null
   folder_name: string | null
   row_counts: Record<string, number>
+  live: boolean
+  template_changed: boolean
 }
 
 export async function listExtractions(): Promise<ExtractionSummary[]> {
@@ -328,6 +332,8 @@ export interface Folder {
   id: string
   name: string
   created: string
+  template_id: string | null
+  auto_extract: boolean // read documents go into the folder's live extraction
   document_count: number
 }
 
@@ -349,6 +355,14 @@ export async function listFolders(): Promise<Folder[]> {
 
 export const createFolder = (name: string): Promise<Folder> => sendJson('/folders', 'POST', { name })
 export const renameFolder = (id: string, name: string): Promise<Folder> => sendJson(`/folders/${id}`, 'PATCH', { name })
+/** Only what is given is changed. Turning auto_extract on runs the folder's read documents at once (paid). */
+export const updateFolder = (
+  id: string,
+  changes: { template_id?: string | null; auto_extract?: boolean },
+): Promise<Folder> => sendJson(`/folders/${id}`, 'PATCH', changes)
+/** Run every read document again with the folder's template as it is now. */
+export const restartLiveExtraction = (folderId: string): Promise<{ extraction_id: string | null }> =>
+  sendJson(`/folders/${folderId}/live`, 'POST')
 export const deleteFolder = (id: string): Promise<void> => sendJson(`/folders/${id}`, 'DELETE')
 
 // --- Login ---

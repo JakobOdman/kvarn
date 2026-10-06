@@ -34,12 +34,16 @@ def test_getting_someone_elses_is_404(annas, anna, bertil, path):
 
 def test_changing_someone_elses_is_404(annas, anna, bertil):
     own_template = bertil.put("/templates", json=TEMPLATE).json()["id"]
+    own_folder = bertil.post("/folders", json={"name": "Bertils"}).json()["id"]
     attempts = [
         bertil.patch(f"/folders/{annas['folder']}", json={"name": "Bertils nu"}),
         bertil.delete(f"/folders/{annas['folder']}"),
         bertil.delete(f"/jobs/{annas['doc']}"),
         bertil.post(f"/jobs/{annas['doc']}/reread"),
         bertil.delete(f"/extractions/{annas['extraction']}"),
+        bertil.patch(f"/folders/{annas['folder']}", json={"auto_extract": True}),
+        bertil.post(f"/folders/{annas['folder']}/live"),
+        bertil.patch(f"/folders/{own_folder}", json={"template_id": annas["template"]}),
         bertil.delete(f"/templates/{annas['template']}"),
         bertil.put("/templates", json={**TEMPLATE, "id": annas["template"], "name": "Kapad"}),
         bertil.post("/uploads", json={"folder_id": annas["folder"], "sha256": "0" * 64}),

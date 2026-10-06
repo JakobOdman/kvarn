@@ -6,11 +6,14 @@ import {
   deleteJob,
   getJob,
   listJobs,
+  listTemplates,
   renameFolder,
+  updateFolder,
   type Folder,
   type JobStatus,
   type JobSummary,
   type ReadSummary,
+  type Template,
 } from '../api'
 import { readLabel, summarize } from '../labels'
 import { Fold } from './Fold'
@@ -79,6 +82,11 @@ export function FileQueue({
   const [noModel, setNoModel] = useState(true)
   const [words, setWords] = useState(false)
   const [newName, setNewName] = useState<string | null>(null) // the folder name while it is being edited
+  const [templates, setTemplates] = useState<Template[]>([])
+
+  useEffect(() => {
+    listTemplates().then(setTemplates)
+  }, [])
 
   useEffect(() => {
     // Saved documents from the server; uploads still on their way (no job id yet) stay on top
@@ -89,6 +97,31 @@ export function FileQueue({
     const name = newName?.trim()
     setNewName(null)
     if (name && name !== folder.name) onFolderChanged(await renameFolder(folder.id, name))
+  }
+
+  async function chooseTemplate(templateId: string) {
+    // Without a template nothing can be extracted automatically
+    const changes = templateId ? { template_id: templateId } : { template_id: null, auto_extract: false }
+    onFolderChanged(await updateFolder(folder.id, changes))
+  }
+
+  async function setAutoExtract(on: boolean) {
+    const read = items.filter((i) => i.status === 'done').length
+    const template = templates.find((t) => t.id === folder.template_id)?.name
+    if (
+      on &&
+      !confirm(
+        `Extrahera automatiskt med ${template}? ` +
+          (read ? `De ${read} lästa dokumenten körs nu, och nya` : 'Nya') +
+          ' dokument körs när de är lästa. Det kostar.',
+      )
+    )
+      return
+    try {
+      onFolderChanged(await updateFolder(folder.id, { auto_extract: on }))
+    } catch (e) {
+      alert((e as Error).message)
+    }
   }
 
   async function removeFolder() {
@@ -169,6 +202,26 @@ export function FileQueue({
         <button title="Ta bort samlingen" onClick={removeFolder}>
           <Trash2 />
         </button>
+      </div>
+      <div className="folder-extract">
+        <span className="caps">Mall</span>
+        <select value={folder.template_id ?? ''} onChange={(e) => chooseTemplate(e.target.value)}>
+          <option value="">Ingen mall</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+        {folder.template_id && (
+          <Toggle
+            label="Extrahera automatiskt"
+            description="Varje dokument körs med mallen när det är läst. Raderna samlas i samlingens aktuella tabell, som alltid stämmer med dokumenten."
+            badge={<span className="cost">Kostar</span>}
+            checked={folder.auto_extract}
+            onChange={setAutoExtract}
+          />
+        )}
       </div>
       <div className="toggles">
         <Toggle

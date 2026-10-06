@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 from api import db, limits, llm, storage
 from api.extract import extract_document
-from api.templates import Template
+from api.templates import Template, load_template
 from read_document import read_document
 
 MAX_ATTEMPTS = 3  # after this many deliveries a document gets an error instead of being tried again
@@ -47,6 +47,23 @@ def read_job(payload: dict, attempt: int = 1):
         db.update_document(job_id, "done", result=result)
     except Exception as e:  # noqa: BLE001 - one bad file must not take the server down
         db.update_document(job_id, "error", error=str(e))
+        return
+    if result["ok"]:
+        extract_automatically(doc)
+
+
+def extract_automatically(doc: dict):
+    """A read document in a folder with automatic extraction goes into the folder's live extraction, paid."""
+    from api import jobs  # jobs imports this module
+    folder = db.get_folder(doc["folder_id"], doc["user_id"])
+    if not folder["auto_extract"] or not folder["template_id"]:
+        return
+    template = load_template(folder["template_id"], doc["user_id"])
+    if template is None:
+        return  # the template is gone
+    extraction_id = db.add_to_live_extraction(folder, doc["id"], doc["name"], template.model_dump())
+    if extraction_id:
+        jobs.enqueue_from_job("extract", {"extraction_id": extraction_id, "job_id": doc["id"], "paid": True})
 
 
 def extract_job(payload: dict, attempt: int = 1):
