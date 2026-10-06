@@ -784,7 +784,7 @@ code {
 .template-form textarea {
   font: 13px/1.6 var(--mono);
   resize: vertical;
-  height: calc(100vh - 420px); /* the Instruktion tab is just the name and this: let it fill the screen */
+  height: calc(100vh - 490px); /* the Instruktion tab is just the name, the model and this: let it fill the screen */
   min-height: 280px;
 }
 
