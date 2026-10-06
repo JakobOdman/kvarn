@@ -255,7 +255,7 @@ export function ExtractView() {
             <span className="caps">Tidigare körningar</span>
             <ul className="queue">
               {groupRuns(history).map(([latest, ...older]) => {
-                const key = latest.live ? `live/${latest.id}` : `${latest.folder_id}/${latest.template_id}`
+                const key = `${latest.folder_id}/${latest.template_id}`
                 const open = expanded.has(key)
                 return [
                   <EarlierRun
@@ -326,8 +326,9 @@ export function ExtractView() {
 /** The runs grouped by folder and template, newest first in each group (the list comes newest first). */
 function groupRuns(runs: ExtractionSummary[]): ExtractionSummary[][] {
   const groups = new Map<string, ExtractionSummary[]>()
+  // The live runs first, so a live run heads its group and the groups with one come first
   for (const r of [...runs.filter((r) => r.live), ...runs.filter((r) => !r.live)]) {
-    const key = r.live ? `live/${r.id}` : `${r.folder_id}/${r.template_id}` // a live run is a group of its own, first
+    const key = `${r.folder_id}/${r.template_id}`
     groups.set(key, [...(groups.get(key) ?? []), r])
   }
   return [...groups.values()]
