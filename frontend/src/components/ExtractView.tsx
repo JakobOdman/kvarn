@@ -1,7 +1,8 @@
-import { FileText, Table2 } from 'lucide-react'
+import { FileText, Table2, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   createExtraction,
+  deleteExtraction,
   downloadXlsx,
   getExtraction,
   listExtractions,
@@ -36,6 +37,7 @@ export function ExtractView() {
   const [extraction, setExtraction] = useState<Extraction | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [history, setHistory] = useState<ExtractionSummary[]>([])
+  const [expanded, setExpanded] = useState<Set<string>>(new Set()) // groups showing their older runs
   const [collapsed, setCollapsed] = useState(false) // the left column folded in, so the result gets the width
 
   useEffect(() => {
@@ -69,6 +71,22 @@ export function ExtractView() {
     setExtractionId(id)
     setExtraction(await getExtraction(id))
     setCollapsed(true)
+  }
+
+  async function removeEarlier(h: ExtractionSummary) {
+    if (!confirm(`Ta bort körningen från ${formatTime(h.created)}? Raderna försvinner.`)) return
+    await deleteExtraction(h.id)
+    if (h.id === extractionId) {
+      setExtractionId(null)
+      setExtraction(null)
+    }
+    setHistory(await listExtractions())
+  }
+
+  function toggleOlder(key: string) {
+    const next = new Set(expanded)
+    if (!next.delete(key)) next.add(key)
+    setExpanded(next)
   }
 
   async function run(asPaid: boolean) {
@@ -213,27 +231,33 @@ export function ExtractView() {
           <section className="card">
             <span className="caps">Tidigare körningar</span>
             <ul className="queue">
-              {history.map((h) => {
-                const rows = Object.values(h.row_counts).reduce((a, b) => a + b, 0)
-                return (
-                  <li
-                    key={h.id}
-                    className={`done ${h.id === extractionId ? 'selected' : ''}`}
-                    onClick={() => openEarlier(h.id)}
-                  >
-                    <span className="icon">
-                      <Table2 />
-                      <span className={`dot ${h.documents.some((d) => d.error) ? 'warn' : h.status}`} />
-                    </span>
-                    <div>
-                      <div className="queue-name">{h.folder_name ?? 'Utan samling'}</div>
-                      <div className="queue-meta">
-                        {h.template_name} · {h.documents.length} dokument · {rows} rader
-                      </div>
-                      <div className="queue-meta faint">{formatTime(h.created)}</div>
-                    </div>
-                  </li>
-                )
+              {groupRuns(history).map(([latest, ...older]) => {
+                const key = `${latest.folder_id}/${latest.template_id}`
+                const open = expanded.has(key)
+                return [
+                  <EarlierRun
+                    key={latest.id}
+                    run={latest}
+                    selected={latest.id === extractionId}
+                    onOpen={() => openEarlier(latest.id)}
+                    onRemove={() => removeEarlier(latest)}
+                    older={older.length}
+                    olderOpen={open}
+                    onToggleOlder={() => toggleOlder(key)}
+                  />,
+                  ...(open
+                    ? older.map((h) => (
+                        <EarlierRun
+                          key={h.id}
+                          run={h}
+                          older={0}
+                          selected={h.id === extractionId}
+                          onOpen={() => openEarlier(h.id)}
+                          onRemove={() => removeEarlier(h)}
+                        />
+                      ))
+                    : []),
+                ]
               })}
             </ul>
           </section>
@@ -264,6 +288,67 @@ export function ExtractView() {
         </div>
       )}
     </>
+  )
+}
+
+/** The runs grouped by folder and template, newest first in each group (the list comes newest first). */
+function groupRuns(runs: ExtractionSummary[]): ExtractionSummary[][] {
+  const groups = new Map<string, ExtractionSummary[]>()
+  for (const r of runs) {
+    const key = `${r.folder_id}/${r.template_id}`
+    groups.set(key, [...(groups.get(key) ?? []), r])
+  }
+  return [...groups.values()]
+}
+
+/** One earlier run in the list. The newest of a group also opens its older runs. */
+function EarlierRun({ run, selected, onOpen, onRemove, older, olderOpen, onToggleOlder }: {
+  run: ExtractionSummary
+  selected: boolean
+  onOpen: () => void
+  onRemove: () => void
+  older: number
+  olderOpen?: boolean
+  onToggleOlder?: () => void
+}) {
+  const rows = Object.values(run.row_counts).reduce((a, b) => a + b, 0)
+  const isOlder = !onToggleOlder
+  return (
+    <li className={`done ${selected ? 'selected' : ''} ${isOlder ? 'older' : ''}`} onClick={onOpen}>
+      <span className="icon">
+        <Table2 />
+        <span className={`dot ${run.documents.some((d) => d.error) ? 'warn' : run.status}`} />
+      </span>
+      <div>
+        {!isOlder && <div className="queue-name">{run.folder_name ?? 'Utan samling'}</div>}
+        <div className="queue-meta">
+          {!isOlder && `${run.template_name} · `}
+          {run.documents.length} dokument · {rows} rader
+        </div>
+        <div className="queue-meta faint">{formatTime(run.created)}</div>
+        <div className="item-actions">
+          {older > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onToggleOlder?.()
+              }}
+            >
+              {olderOpen ? 'Dölj' : older === 1 ? '1 tidigare' : `${older} tidigare`}
+            </button>
+          )}
+          <button
+            title="Ta bort körningen"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
+          >
+            <Trash2 />
+          </button>
+        </div>
+      </div>
+    </li>
   )
 }
 

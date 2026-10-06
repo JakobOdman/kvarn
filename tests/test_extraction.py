@@ -84,6 +84,16 @@ def test_xlsx_has_document_fields_and_page(anna, by_company):
         ["dokument", "bolag", "varde", "sida"], ["alfa.pdf", "Alfa AB", "100", 1]]
 
 
+def test_an_earlier_run_can_be_deleted(anna, by_company):
+    folder = anna.post("/folders", json={"name": "Fonder"}).json()["id"]
+    add_read_document(folder, "alfa.pdf", "Alfa AB 100")
+    first, second = run(anna, folder), run(anna, folder)
+    assert anna.delete(f"/extractions/{first['id']}").status_code == 200
+    assert [e["id"] for e in anna.get("/extractions").json()] == [second["id"]]
+    assert anna.get(f"/extractions/{first['id']}").status_code == 404
+    assert anna.delete(f"/extractions/{first['id']}").status_code == 404
+
+
 def test_pages_as_text():
     result = {"pages": [{"page_no": 1, "text": "Första", "reader": "pdf_text"},
                         {"page_no": 2, "text": "Andra", "reader": "claude_vision"}]}

@@ -283,6 +283,13 @@ def finish_extraction_document(extraction_id: str, job_id: str, changes: dict, r
                     (status, Jsonb(documents), Jsonb(tables), extraction_id))
 
 
+def delete_extraction(extraction_id: str, user_id: str) -> bool:
+    """False if it didn't exist or is someone else's. What it cost stays in usage."""
+    with connect() as con:
+        return con.execute("DELETE FROM extractions WHERE id = %s AND user_id = %s",
+                           (extraction_id, user_id)).rowcount > 0
+
+
 def list_extractions(user_id: str) -> list[dict]:
     """The user's extractions, newest first, without the rows: template name, documents and rows per table."""
     with connect() as con:

@@ -279,6 +279,14 @@ async def get_extraction(extraction_id: str, user: dict = Depends(current_user))
     return extraction | {"checks": run_checks(template, extraction)}
 
 
+@api.delete("/extractions/{extraction_id}")
+async def delete_extraction(extraction_id: str, user: dict = Depends(current_user)):
+    """Remove an earlier run. Documents still running in it are skipped by their jobs."""
+    if not db.delete_extraction(extraction_id, user["id"]):
+        raise HTTPException(404, "Unknown extraction")
+    return {"deleted": extraction_id}
+
+
 @api.get("/extractions/{extraction_id}/xlsx")
 async def get_extraction_xlsx(extraction_id: str, user: dict = Depends(current_user)):
     """All tables in one Excel file, one sheet per table. Columns: dokument, the template's fields, sida."""

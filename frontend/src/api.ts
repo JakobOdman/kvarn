@@ -265,6 +265,11 @@ export async function listExtractions(): Promise<ExtractionSummary[]> {
   return res.json()
 }
 
+export async function deleteExtraction(id: string): Promise<void> {
+  const res = await apiFetch(`/extractions/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(await errorText(res))
+}
+
 /** All read documents, or one folder's. */
 export async function listJobs(folderId?: string): Promise<JobSummary[]> {
   const res = await apiFetch(folderId ? `/jobs?folder_id=${folderId}` : '/jobs')

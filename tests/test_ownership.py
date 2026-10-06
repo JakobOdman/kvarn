@@ -39,6 +39,7 @@ def test_changing_someone_elses_is_404(annas, anna, bertil):
         bertil.delete(f"/folders/{annas['folder']}"),
         bertil.delete(f"/jobs/{annas['doc']}"),
         bertil.post(f"/jobs/{annas['doc']}/reread"),
+        bertil.delete(f"/extractions/{annas['extraction']}"),
         bertil.delete(f"/templates/{annas['template']}"),
         bertil.put("/templates", json={**TEMPLATE, "id": annas["template"], "name": "Kapad"}),
         bertil.post("/uploads", json={"folder_id": annas["folder"], "sha256": "0" * 64}),

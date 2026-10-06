@@ -531,6 +531,10 @@ code {
   background: var(--surface);
 }
 
+.queue li.older {
+  margin-left: 24px;
+}
+
 .queue li.selected .icon {
   background: var(--bg);
 }
