@@ -16,8 +16,9 @@ Usage:
   python read_document.py kvitto.heic --words         # include word boxes in output
 
 Env:
-  ANTHROPIC_API_KEY   required for scans and photos
-  READER_MODEL        model id for transcription (default below)
+  ANTHROPIC_API_KEY   required for scans and photos (Claude)
+  READER_MODEL        model id for transcription (default below), gpt-* reads with GPT in Azure Foundry
+  AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT   for gpt-* models (without a key: the managed identity in AZURE_CLIENT_ID)
 """
 from __future__ import annotations
 
@@ -48,6 +49,7 @@ MODEL_PAGE_CONCURRENCY = 3         # pages the model reads at once
 IMAGE_MAX_DIMENSION = 2000         # px, longest side sent to the model
 IMAGE_DOWNSCALE_THRESHOLD = int(3.5 * 1024 * 1024)  # base64 is 4/3 of the file; API limit is 5 MB
 DEFAULT_MODEL = os.environ.get("READER_MODEL", "claude-sonnet-5-5")
+AZURE_OPENAI_ENDPOINT = "https://OdmanFoundry.services.ai.azure.com/openai/v1"
 
 PDF = "application/pdf"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -276,15 +278,55 @@ def _anthropic():
     return _client
 
 
-def transcribe(block: dict, model: str = DEFAULT_MODEL) -> str:
-    """block is an Anthropic content block (document or image). Returns '' for no text."""
-    resp = _anthropic().messages.create(
+_openai_client = None
+
+
+def _openai():
+    """GPT in Azure Foundry, for those who read with GPT instead of Claude."""
+    global _openai_client
+    if _openai_client is None:
+        key = os.environ.get("AZURE_OPENAI_API_KEY")
+        if not key and os.environ.get("AZURE_CLIENT_ID"):
+            from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+            key = get_bearer_token_provider(DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default")
+        if not key:
+            raise ModelUnavailable("AZURE_OPENAI_API_KEY is not set")
+        from openai import OpenAI
+        _openai_client = OpenAI(base_url=os.environ.get("AZURE_OPENAI_ENDPOINT", AZURE_OPENAI_ENDPOINT), api_key=key)
+    return _openai_client
+
+
+def _transcribe_gpt(block: dict, model: str) -> str:
+    """The Anthropic block as a file (PDF page) or an image in OpenAI's Responses API."""
+    source = block["source"]
+    url = f"data:{source['media_type']};base64,{source['data']}"
+    if block["type"] == "document":
+        content = {"type": "input_file", "filename": "page.pdf", "file_data": url}
+    else:
+        content = {"type": "input_image", "image_url": url}
+    resp = _openai().responses.create(
         model=model,
-        max_tokens=6000,
-        system=TRANSCRIBE_SYSTEM,
-        messages=[{"role": "user", "content": [block, {"type": "text", "text": "Transcribe this page."}]}],
+        instructions=TRANSCRIBE_SYSTEM,
+        input=[{"role": "user", "content": [content, {"type": "input_text", "text": "Transcribe this page."}]}],
+        max_output_tokens=6000,
+        reasoning={"effort": "none"},
     )
-    text = "".join(getattr(c, "text", "") for c in resp.content).strip()
+    return resp.output_text.strip()
+
+
+def transcribe(block: dict, model: str = DEFAULT_MODEL) -> str:
+    """block is an Anthropic content block (document or image). Returns '' for no text.
+    Claude, or GPT when the model is a gpt-* deployment."""
+    if model.startswith("gpt-"):
+        text = _transcribe_gpt(block, model)
+    else:
+        resp = _anthropic().messages.create(
+            model=model,
+            max_tokens=6000,
+            system=TRANSCRIBE_SYSTEM,
+            messages=[{"role": "user", "content": [block, {"type": "text", "text": "Transcribe this page."}]}],
+        )
+        text = "".join(getattr(c, "text", "") for c in resp.content).strip()
     return "" if is_reader_commentary(text) else text
 
 
