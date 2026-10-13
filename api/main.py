@@ -61,6 +61,7 @@ class FolderChanges(BaseModel):
     template_id: str | None = None
     auto_extract: bool | None = None
     mcp_enabled: bool | None = None
+    mcp_description: str | None = None
 
 
 @api.get("/folders")
@@ -94,6 +95,9 @@ async def update_folder(folder_id: str, request: FolderChanges, user: dict = Dep
     folder |= changes
     if folder["auto_extract"] and not folder["template_id"]:
         raise HTTPException(400, "Välj en mall för att extrahera automatiskt.")
+    if "mcp_description" in changes:
+        changes["mcp_description"] = (changes["mcp_description"] or "").strip() or None
+        changes["mcp_description_basis"] = description_basis(folder)
     db.update_folder(folder_id, user["id"], changes)
     if was_on and not folder["auto_extract"]:
         db.end_live_extraction(folder_id)
@@ -112,6 +116,50 @@ async def restart_live_extraction(folder_id: str, user: dict = Depends(current_u
     if not folder["template_id"]:
         raise HTTPException(400, "Samlingen har ingen mall.")
     return {"extraction_id": await start_live_extraction(folder)}
+
+
+def description_basis(folder: dict) -> str | None:
+    """What the folder's MCP description is written from, as now (mcp.basis). None without a template."""
+    template = load_template(folder["template_id"], folder["user_id"]) if folder["template_id"] else None
+    if template is None:
+        return None
+    documents = [d["name"] for d in db.list_documents(folder["user_id"], folder["id"]) if d["status"] == "done"]
+    return mcp.basis(template, documents)
+
+
+@api.get("/folders/{folder_id}/mcp-description")
+async def get_mcp_description(folder_id: str, user: dict = Depends(current_user)):
+    """{"description", "created", "stale"}: stale when the template or the read documents have changed since."""
+    folder = db.get_folder(folder_id, user["id"])
+    if folder is None:
+        raise HTTPException(404, "Unknown folder")
+    return {"description": folder["mcp_description"], "created": folder["mcp_description_created"],
+            "stale": bool(folder["mcp_description"]) and folder["mcp_description_basis"] != description_basis(folder)}
+
+
+@api.post("/folders/{folder_id}/mcp-description")
+async def create_mcp_description(folder_id: str, user: dict = Depends(current_user)):
+    """The AI writes the folder's MCP description from the template and the live extraction, and it is saved
+    (paid, one call). Returns the same as GET."""
+    folder = db.get_folder(folder_id, user["id"])
+    if folder is None:
+        raise HTTPException(404, "Unknown folder")
+    extraction = db.get_live_extraction(folder_id)
+    if extraction is None:
+        raise HTTPException(400, "Samlingen har ingen aktuell tabell. Slå på Extrahera automatiskt.")
+    template = Template.model_validate(extraction["template"])
+    client = llm.AzureClient() if llm.paid_allowed() else llm.FakeClient()
+    try:
+        answer, _ = llm.ask(mcp.description_prompt(folder["name"], template, extraction), mcp.DESCRIPTION_SCHEMA,
+                            db.Cache(user["id"]), db.Meter(user["id"]), client=client, paid=True)
+    except (llm.NotCached, limits.QuotaExceeded, limits.TooLarge) as e:
+        raise HTTPException(400, str(e))
+    text = answer.get("beskrivning")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(400, "AI:n gav ingen beskrivning. Är AI-anrop påslagna (betalt läge)?")
+    db.update_folder(folder_id, user["id"], {"mcp_description": text.strip(),
+                                             "mcp_description_basis": description_basis(folder)})
+    return await get_mcp_description(folder_id, user)
 
 
 @api.post("/folders/{folder_id}/api-key")

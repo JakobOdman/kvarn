@@ -5,6 +5,7 @@ Streamable HTTP without sessions: one POST with a JSON-RPC message in, JSON out,
 an in-memory SQLite on every call, so the questions never reach Postgres or another folder. The same file in Kvarn
 and Kvarn Enterprise: it only needs the templates.
 """
+import hashlib
 import json
 import sqlite3
 import time
@@ -74,7 +75,8 @@ def answer(method: str, params: dict, folder: dict, live) -> dict:
         return {"protocolVersion": version if version in VERSIONS else VERSIONS[0],
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": folder["name"], "version": "1"},
-                "instructions": INSTRUCTIONS}
+                "instructions": INSTRUCTIONS + (f"\n\n{folder['mcp_description']}"
+                                                if folder.get("mcp_description") else "")}
     if method == "ping":
         return {}
     if method == "tools/list":
@@ -95,6 +97,8 @@ def call(name: str, arguments: dict, folder: dict, live) -> dict:
         con = load(folder["name"], template, extraction["tables"])
         if name == "kvarn_schema":
             result = schema(folder["name"], template, con, [d["name"] for d in extraction["documents"]])
+            if folder.get("mcp_description"):
+                result = {"beskrivning": folder["mcp_description"]} | result
             cut = False
         else:
             result, cut = select(con, arguments.get("fraga") or "")
@@ -193,3 +197,49 @@ def select(con: sqlite3.Connection, query: str) -> tuple[list[dict], bool]:
         raise ToolError(f"{e}. Kontrollera tabell- och kolumnnamn med kvarn_schema. Bara SELECT är tillåtet.")
     names = [d[0] for d in cursor.description or []]
     return [dict(zip(names, r)) for r in rows], cut
+
+
+# --- The folder's description, written by the AI once and kept on the folder ---
+
+DESCRIPTION_SCHEMA = {"type": "object", "properties": {"beskrivning": {"type": "string"}},
+                      "required": ["beskrivning"], "additionalProperties": False}
+EXAMPLE_ROWS = 5
+EXAMPLE_CHARS = 200
+
+
+def basis(template: Template, documents: list[str]) -> str:
+    """sha256 of what a description is written from: the template's prompt and tables, and the read documents."""
+    content = {"prompt": template.prompt, "tables": [t.model_dump() for t in template.tables],
+               "documents": sorted(documents)}
+    return hashlib.sha256(json.dumps(content, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def description_prompt(folder_name: str, template: Template, extraction: dict) -> str:
+    """The prompt for the AI that writes the description: the template and a few rows of every table."""
+    lines = [
+        "Du skriver en kort beskrivning för en AI-assistent som ska svara på frågor om en samling dokument genom att "
+        "fråga tabeller med SQL. Tabellerna har tagits fram ur dokumenten med instruktionen och mallen nedan.",
+        "",
+        "Skriv på svenska, högst 250 ord, i löpande text eller korta punkter, utan rubriker. Ta med: vad samlingen "
+        "handlar om (utifrån datan), vad varje tabell innehåller, hur tabellerna hänger ihop, och fallgropar, t.ex. "
+        "hur valfälten ska tolkas och vad som aldrig finns i datan. Ta bara med det som instruktionen eller datan "
+        "stöder.",
+        "",
+        f"## Samlingen: {folder_name}",
+        "Dokument: " + ", ".join(d["name"] for d in extraction["documents"]),
+        "",
+        "## Instruktionen som användes när dokumenten lästes",
+        template.prompt,
+        "",
+        "## Tabellerna",
+    ]
+    for table in template.tables:
+        rows = extraction["tables"].get(table.name, [])
+        lines.append(f"### {table.name} ({len(rows)} rader){': ' + table.description if table.description else ''}")
+        for f in table.fields:
+            choices = f" (val: {', '.join(f.choices)})" if f.choices else ""
+            lines.append(f"- {f.name}{choices}{': ' + f.description if f.description else ''}")
+        for row in rows[:EXAMPLE_ROWS]:
+            example = {k: str(v)[:EXAMPLE_CHARS] for k, v in row.items() if v not in (None, "")}
+            lines.append("  Exempel: " + json.dumps(example, ensure_ascii=False))
+    return "\n".join(lines)

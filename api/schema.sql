@@ -77,6 +77,11 @@ ALTER TABLE folders ADD COLUMN IF NOT EXISTS api_key_hash TEXT;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS api_key_created TEXT;
 -- Whether the folder's MCP server answers (api/mcp.py). Off until the owner turns it on.
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS mcp_enabled BOOLEAN NOT NULL DEFAULT false;
+-- The MCP server's description of the folder, written by the AI (or the owner), and the sha256 of the template and
+-- documents it was written from: when they change, it may be stale.
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS mcp_description TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS mcp_description_created TEXT;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS mcp_description_basis TEXT;
 
 CREATE INDEX IF NOT EXISTS folders_user ON folders (user_id);
 CREATE INDEX IF NOT EXISTS documents_folder ON documents (folder_id);

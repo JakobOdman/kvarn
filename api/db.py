@@ -121,8 +121,11 @@ def add_folder(name: str, user_id: str) -> dict:
 
 
 def update_folder(folder_id: str, user_id: str, changes: dict) -> bool:
-    """changes: any of name, template_id, auto_extract, mcp_enabled."""
-    changes = {k: v for k, v in changes.items() if k in ("name", "template_id", "auto_extract", "mcp_enabled")}
+    """changes: any of name, template_id, auto_extract, mcp_enabled, mcp_description (with its basis)."""
+    changes = {k: v for k, v in changes.items() if k in ("name", "template_id", "auto_extract", "mcp_enabled",
+                                                         "mcp_description", "mcp_description_basis")}
+    if "mcp_description" in changes:
+        changes["mcp_description_created"] = _now()
     sets = ", ".join(f"{k} = %({k})s" for k in changes) or "name = name"
     with connect() as con:
         return con.execute(f"UPDATE folders SET {sets} WHERE id = %(id)s AND user_id = %(user)s",
@@ -152,9 +155,11 @@ def folder_api_key_hash(folder_id: str) -> str | None:
 
 
 def public_folder(folder_id: str) -> dict | None:
-    """What the MCP server needs to know about a folder: {"name", "mcp_enabled"}. For the key's holder, not a user."""
+    """What the MCP server needs to know about a folder: {"name", "mcp_enabled", "mcp_description"}. For the key's
+    holder, not a user."""
     with connect() as con:
-        return con.execute("SELECT name, mcp_enabled FROM folders WHERE id = %s", (folder_id,)).fetchone()
+        return con.execute("SELECT name, mcp_enabled, mcp_description FROM folders WHERE id = %s",
+                           (folder_id,)).fetchone()
 
 
 def get_live_extraction(folder_id: str) -> dict | None:
