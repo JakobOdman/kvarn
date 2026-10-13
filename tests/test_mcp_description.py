@@ -12,11 +12,13 @@ from tests.test_work import ByName
 class Describes(ByName):
     """Answers with a description, and keeps the prompt it got."""
     prompts = []
+    models = []
 
     def send(self, prompt, schema, model):
         if "beskrivning" not in schema["properties"]:
             return super().send(prompt, schema, model)
         Describes.prompts.append(prompt)
+        Describes.models.append(model)
         return {"beskrivning": "Fondernas innehav, ett bolag per rad."}, 10, 5
 
 
@@ -31,6 +33,7 @@ def mcp_on(anna, folder):
 @pytest.fixture
 def describes(monkeypatch, reading):
     Describes.prompts = []
+    Describes.models = []
     monkeypatch.setattr(llm, "FakeClient", Describes)
 
 
@@ -95,3 +98,12 @@ def test_only_the_owner(anna, bertil, folder, mcp_on, describes):
     assert bertil.post(f"/folders/{folder}/mcp-description").status_code == 404
     assert bertil.get(f"/folders/{folder}/mcp-description").status_code == 404
     assert Describes.prompts == []
+
+
+def test_it_uses_the_templates_model(anna, folder, mcp_on, describes):
+    """Kvarn Enterprise only has the models the customer has deployed: the template's is one of them."""
+    changed = anna.get("/templates").json()[0] | {"model": "gpt-5.4-nano"}
+    anna.put("/templates", json=changed)
+    anna.post(f"/folders/{folder}/live")  # the live extraction gets the template as it is now
+    anna.post(f"/folders/{folder}/mcp-description")
+    assert Describes.models == ["gpt-5.4-nano"]

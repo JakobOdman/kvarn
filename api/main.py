@@ -151,7 +151,8 @@ async def create_mcp_description(folder_id: str, user: dict = Depends(current_us
     client = llm.AzureClient() if llm.paid_allowed() else llm.FakeClient()
     try:
         answer, _ = llm.ask(mcp.description_prompt(folder["name"], template, extraction), mcp.DESCRIPTION_SCHEMA,
-                            db.Cache(user["id"]), db.Meter(user["id"]), client=client, paid=True)
+                            db.Cache(user["id"]), db.Meter(user["id"]), model=template.model, client=client,
+                            paid=True)
     except (llm.NotCached, limits.QuotaExceeded, limits.TooLarge) as e:
         raise HTTPException(400, str(e))
     text = answer.get("beskrivning")
