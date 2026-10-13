@@ -160,3 +160,41 @@ def test_json_rpc_errors(outside, folder, key):
     response = outside.post(f"/public/folders/{folder}/mcp", content=b"{inte json",
                             headers={"Authorization": f"Bearer {key}"})
     assert response.json()["error"]["code"] == -32700
+
+
+def test_huge_values_and_answers_are_refused(outside, folder, key):
+    text, error = sql(outside, folder, key, "SELECT zeroblob(5000000) AS b")
+    assert error and "kvarn_schema" in text
+    text, error = sql(outside, folder, key, "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n "
+                                            "WHERE i < 20) SELECT printf('%.*c', 200000, 'x') FROM n")
+    assert error and "för stort" in text
+
+
+def test_names_that_differ_only_in_case_still_work(anna, outside, folder):
+    template = anna.put("/templates", json={"name": "Skiftläge", "prompt": "Hitta bolagen.", "tables": [
+        {"name": "innehav", "fields": [{"name": "Dokument"}, {"name": "bolag"}, {"name": "Bolag"}]},
+        {"name": "Innehav", "fields": [{"name": "x"}]}]}).json()["id"]
+    anna.patch(f"/folders/{folder}", json={"template_id": template, "auto_extract": True, "mcp_enabled": True})
+    upload(anna, folder, "a.pdf", "Alfa")
+    key = anna.post(f"/folders/{folder}/api-key").json()["key"]
+    answer, error = tool(outside, folder, key, "kvarn_schema")
+    assert not error and list(answer["tabeller"]["innehav"]["kolumner"]) == [
+        "samling", "dokument", "bolag", "sida", "citat"]
+    rows, error = sql(outside, folder, key, "SELECT dokument, bolag FROM innehav")
+    assert not error and rows == [{"dokument": "a.pdf", "bolag": "Alfa"}]
+
+
+def test_a_cut_answer_says_so(outside, folder, key):
+    result = rpc(outside, folder, key, "tools/call", {"name": "kvarn_sql", "arguments": {
+        "fraga": "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 500) SELECT i FROM n"}}
+                 ).json()["result"]
+    assert len(json.loads(result["content"][0]["text"])) == 200
+    assert "200" in result["content"][1]["text"] and "COUNT" in result["content"][1]["text"]
+    result = rpc(outside, folder, key, "tools/call", {"name": "kvarn_sql", "arguments": {
+        "fraga": "SELECT count(*) FROM innehav"}}).json()["result"]
+    assert len(result["content"]) == 1
+
+
+def test_the_instruction_does_not_promise_quotes(outside, folder, key):
+    result = rpc(outside, folder, key, "initialize", {}).json()["result"]
+    assert "citat när det finns" in result["instructions"]

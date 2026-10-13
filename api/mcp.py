@@ -16,8 +16,9 @@ from api.templates import Template
 
 VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26"]  # newest first; a client asking for another gets the first
 MAX_ROWS = 200
+MAX_CHARS = 1_000_000  # the most an answer may hold, and the longest value SQLite may make
 SECONDS = 5  # a question that takes longer is stopped
-INSTRUCTIONS = ("Svara bara utifrån tabellerna. Ange alltid källa: dokument, sida och citat. "
+INSTRUCTIONS = ("Svara bara utifrån tabellerna. Ange alltid källa: dokument och sida, och citat när det finns. "
                 "Anropa kvarn_schema först.")
 READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
 TOOLS = [
@@ -94,21 +95,37 @@ def call(name: str, arguments: dict, folder: dict, live) -> dict:
         con = load(folder["name"], template, extraction["tables"])
         if name == "kvarn_schema":
             result = schema(folder["name"], template, con, [d["name"] for d in extraction["documents"]])
+            cut = False
         else:
-            result = select(con, arguments.get("fraga") or "")
+            result, cut = select(con, arguments.get("fraga") or "")
     except ToolError as e:
         return {"content": [{"type": "text", "text": str(e)}], "isError": True}
-    return {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}]}
+    content = [{"type": "text", "text": json.dumps(result, ensure_ascii=False, default=str)}]
+    if cut:
+        content.append({"type": "text", "text": f"Svaret är avkortat till {MAX_ROWS} rader. Räkna med COUNT eller "
+                                                "begränsa med WHERE i stället för att räkna raderna."})
+    return {"content": content}
 
 
 def quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
+def tables(template: Template) -> list:
+    """The template's tables, without one whose name is taken: SQLite ignores case in names."""
+    found = {}
+    for table in template.tables:
+        found.setdefault(table.name.casefold(), table)
+    return list(found.values())
+
+
 def columns(table) -> list[str]:
-    """samling, dokument, the template's fields, sida, citat. A field with the same name as a fixed one is not
-    repeated."""
-    return list(dict.fromkeys(["samling", "dokument", *(f.name for f in table.fields), "sida", "citat"]))
+    """samling, dokument, the template's fields, sida, citat. A field whose name is taken, also in another case,
+    is left out."""
+    found = {}
+    for name in ["samling", "dokument", *(f.name for f in table.fields), "sida", "citat"]:
+        found.setdefault(name.casefold(), name)
+    return list(found.values())
 
 
 def value(v):
@@ -119,44 +136,55 @@ def value(v):
     return v
 
 
-def load(folder_name: str, template: Template, tables: dict) -> sqlite3.Connection:
+def load(folder_name: str, template: Template, rows: dict) -> sqlite3.Connection:
     """The live extraction's rows in an in-memory SQLite that only reads from here on."""
     con = sqlite3.connect(":memory:")
-    for table in template.tables:
+    con.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_CHARS)
+    for table in tables(template):
         names = columns(table)
         con.execute(f"CREATE TABLE {quote(table.name)} ({', '.join(map(quote, names))})")
-        rows = [[folder_name if c == "samling" else value(row.get(c)) for c in names]
-                for row in tables.get(table.name, [])]
-        con.executemany(f"INSERT INTO {quote(table.name)} VALUES ({', '.join('?' * len(names))})", rows)
+        values = [[folder_name if c == "samling" else value(row.get(c)) for c in names]
+                for row in rows.get(table.name, [])]
+        con.executemany(f"INSERT INTO {quote(table.name)} VALUES ({', '.join('?' * len(names))})", values)
     con.set_authorizer(lambda action, *_: sqlite3.SQLITE_OK if action in ALLOWED else sqlite3.SQLITE_DENY)
     return con
 
 
 def schema(folder_name: str, template: Template, con: sqlite3.Connection, documents: list[str]) -> dict:
     fixed = {"samling": "Samlingens namn", "dokument": "Filnamnet", "sida": "Sidan i dokumentet",
-             "citat": "Ordagrant ur dokumentet"}
-    tables = {}
-    for table in template.tables:
+             "citat": "Ordagrant ur dokumentet, när det finns"}
+    found = {}
+    for table in tables(template):
         descriptions = fixed | {f.name: f.description for f in table.fields}
         t = quote(table.name)
-        tables[table.name] = {"beskrivning": table.description,
+        found[table.name] = {"beskrivning": table.description,
                               "rader": con.execute(f"SELECT count(*) FROM {t}").fetchone()[0],
                               "kolumner": {c: descriptions[c] for c in columns(table)}}
         for f in table.fields:
-            if f.choices:
-                found = con.execute(f"SELECT DISTINCT {quote(f.name)} FROM {t} WHERE {quote(f.name)} IS NOT NULL")
-                tables[table.name][f"värden i {f.name}"] = [r[0] for r in found]
-    return {"samling": folder_name, "mall": template.name, "dokument": documents, "tabeller": tables}
+            if f.choices and f.name in found[table.name]["kolumner"]:
+                distinct = con.execute(f"SELECT DISTINCT {quote(f.name)} FROM {t} WHERE {quote(f.name)} IS NOT NULL")
+                found[table.name][f"värden i {f.name}"] = [r[0] for r in distinct]
+    return {"samling": folder_name, "mall": template.name, "dokument": documents, "tabeller": found}
 
 
-def select(con: sqlite3.Connection, query: str) -> list[dict]:
+def select(con: sqlite3.Connection, query: str) -> tuple[list[dict], bool]:
+    """The rows, at most MAX_ROWS, and whether there were more."""
     if not query.strip():
         raise ToolError("Ange en SELECT i fraga.")
     deadline = time.monotonic() + SECONDS
     con.set_progress_handler(lambda: time.monotonic() > deadline, 10_000)
+    rows, size, cut = [], 0, False
     try:
         cursor = con.execute(query)
-        rows = cursor.fetchmany(MAX_ROWS)
+        for row in cursor:
+            if len(rows) == MAX_ROWS:
+                cut = True
+                break
+            size += sum(len(str(v)) for v in row)
+            if size > MAX_CHARS:
+                raise ToolError(f"Svaret är för stort (över {MAX_CHARS:,} tecken). Välj färre kolumner eller rader."
+                                .replace(",", " "))
+            rows.append(row)
     except sqlite3.OperationalError as e:
         if str(e) == "interrupted":
             raise ToolError(f"Frågan tog för lång tid (över {SECONDS} s). Begränsa den, t.ex. med WHERE eller LIMIT.")
@@ -164,4 +192,4 @@ def select(con: sqlite3.Connection, query: str) -> list[dict]:
     except sqlite3.Error as e:
         raise ToolError(f"{e}. Kontrollera tabell- och kolumnnamn med kvarn_schema. Bara SELECT är tillåtet.")
     names = [d[0] for d in cursor.description or []]
-    return [dict(zip(names, r)) for r in rows]
+    return [dict(zip(names, r)) for r in rows], cut

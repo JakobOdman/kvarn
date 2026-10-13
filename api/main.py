@@ -15,6 +15,7 @@ from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from openpyxl import Workbook
 from pydantic import BaseModel, Field
 
@@ -468,7 +469,8 @@ async def mcp_server(folder_id: str, request: Request):
     folder = db.public_folder(folder_id)
     if not folder["mcp_enabled"]:
         raise HTTPException(404, "MCP är inte påslaget för samlingen.")
-    return mcp.handle(await request.body(), folder, lambda: db.get_live_extraction(folder_id))
+    body = await request.body()  # SQLite works in a thread, so a heavy question holds up no one else
+    return await run_in_threadpool(mcp.handle, body, folder, lambda: db.get_live_extraction(folder_id))
 
 
 @public.get("/folders/{folder_id}/mcp")
