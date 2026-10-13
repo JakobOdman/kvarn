@@ -59,6 +59,7 @@ class FolderChanges(BaseModel):
     name: str | None = None
     template_id: str | None = None
     auto_extract: bool | None = None
+    mcp_enabled: bool | None = None
 
 
 @api.get("/folders")

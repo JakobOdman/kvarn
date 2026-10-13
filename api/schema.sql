@@ -75,6 +75,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS extractions_live ON extractions (folder_id) WH
 -- The folder's API key, for reading its live extraction from other systems. Only its sha256 is kept.
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS api_key_hash TEXT;
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS api_key_created TEXT;
+-- Whether the folder's MCP server answers (api/mcp.py). Off until the owner turns it on.
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS mcp_enabled BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS folders_user ON folders (user_id);
 CREATE INDEX IF NOT EXISTS documents_folder ON documents (folder_id);

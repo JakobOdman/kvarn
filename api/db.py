@@ -121,8 +121,8 @@ def add_folder(name: str, user_id: str) -> dict:
 
 
 def update_folder(folder_id: str, user_id: str, changes: dict) -> bool:
-    """changes: any of name, template_id, auto_extract."""
-    changes = {k: v for k, v in changes.items() if k in ("name", "template_id", "auto_extract")}
+    """changes: any of name, template_id, auto_extract, mcp_enabled."""
+    changes = {k: v for k, v in changes.items() if k in ("name", "template_id", "auto_extract", "mcp_enabled")}
     sets = ", ".join(f"{k} = %({k})s" for k in changes) or "name = name"
     with connect() as con:
         return con.execute(f"UPDATE folders SET {sets} WHERE id = %(id)s AND user_id = %(user)s",
@@ -151,9 +151,15 @@ def folder_api_key_hash(folder_id: str) -> str | None:
     return row["api_key_hash"] if row else None
 
 
+def public_folder(folder_id: str) -> dict | None:
+    """What the MCP server needs to know about a folder: {"name", "mcp_enabled"}. For the key's holder, not a user."""
+    with connect() as con:
+        return con.execute("SELECT name, mcp_enabled FROM folders WHERE id = %s", (folder_id,)).fetchone()
+
+
 def get_live_extraction(folder_id: str) -> dict | None:
     with connect() as con:
-        return con.execute("SELECT template, tables FROM extractions WHERE folder_id = %s AND live",
+        return con.execute("SELECT template, tables, documents FROM extractions WHERE folder_id = %s AND live",
                            (folder_id,)).fetchone()
 
 
@@ -161,7 +167,7 @@ def list_folders(user_id: str) -> list[dict]:
     """The user's folders by name, with the number of documents in each."""
     with connect() as con:
         return con.execute("""
-            SELECT f.id, f.name, f.created, f.template_id, f.auto_extract, f.api_key_created,
+            SELECT f.id, f.name, f.created, f.template_id, f.auto_extract, f.mcp_enabled, f.api_key_created,
                    count(d.id) AS document_count
             FROM folders f LEFT JOIN documents d ON d.folder_id = f.id
             WHERE f.user_id = %s
