@@ -45,7 +45,9 @@ passar Vercels funktioner. Metoder:
 **Data per anrop:** live-extraktionen läses in i en SQLite i minnet, en tabell per tabell i mallen, med
 `PRAGMA query_only = ON`. Claudes SQL når aldrig Postgres eller andra samlingar.
 
-Kolumner i varje tabell: `dokument` (filnamnet), mallens fält i mallens ordning, `sida`, `citat`. Tomma strängar
+Kolumner i varje tabell: `samling` (samlingens namn), `dokument` (filnamnet), mallens fält i mallens ordning,
+`sida`, `citat`. `samling` finns med redan i v1, där den alltid har samma värde, så att strukturen är densamma när en
+MCP över flera samlingar kommer (se Utanför v1). Tomma strängar
 blir `NULL`, tal lagras som tal.
 
 ## Verktyg
@@ -104,7 +106,9 @@ Enterprise beskriver Copilot Studio först och Claude som ett medvetet val av ku
 
 ## Utanför v1
 
-- MCP per mall över flera samlingar
+- MCP per mall över flera samlingar. Samling och mall är två entiteter (en samling kan köras med flera mallar, en
+  mall används i många samlingar). En sådan MCP hör därför hemma på mallen, med egen nyckel och adress, och ser alla
+  samlingar som har mallen som sin mall. Tas när v1 har använts en tid.
 - Gruppering av dokument i en samling (flera upphandlingar)
 - OAuth (Supabase / Entra)
 - Skrivande verktyg, uppladdning, originalfiler
