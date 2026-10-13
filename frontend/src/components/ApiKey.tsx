@@ -75,7 +75,7 @@ export function ApiKey({
   )
 }
 
-function Copy({ value }: { value: string }) {
+export function Copy({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="copy">

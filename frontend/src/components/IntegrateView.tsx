@@ -2,9 +2,12 @@ import { Folder as FolderIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { listFolders, listTemplates, type Folder, type Template } from '../api'
 import { ApiKey } from './ApiKey'
+import { McpServer } from './McpServer'
 
 const status = (f: Folder) =>
-  !f.auto_extract ? 'Ingen aktuell tabell' : f.api_key_created ? 'API-nyckel finns' : 'Ingen API-nyckel'
+  !f.auto_extract
+    ? 'Ingen aktuell tabell'
+    : (f.api_key_created ? 'API-nyckel finns' : 'Ingen API-nyckel') + (f.mcp_enabled ? ' · MCP på' : '')
 
 /** Other systems (Qlik, Power BI, Excel) read a folder's live extraction with the folder's API key. */
 export function IntegrateView() {
@@ -49,12 +52,15 @@ export function IntegrateView() {
         <div className="card integrate">
           <h2>{folder.name}</h2>
           {folder.auto_extract ? (
-            <ApiKey
-              key={folder.id}
-              folder={folder}
-              template={templates.find((t) => t.id === folder.template_id)}
-              onFolderChanged={changed}
-            />
+            <>
+              <ApiKey
+                key={folder.id}
+                folder={folder}
+                template={templates.find((t) => t.id === folder.template_id)}
+                onFolderChanged={changed}
+              />
+              <McpServer folder={folder} onFolderChanged={changed} />
+            </>
           ) : (
             <p className="queue-meta">
               Samlingen har ingen aktuell tabell att hämta. Välj en mall och slå på Extrahera automatiskt för

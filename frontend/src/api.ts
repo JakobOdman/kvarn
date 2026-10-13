@@ -339,6 +339,7 @@ export interface Folder {
   template_id: string | null
   auto_extract: boolean // read documents go into the folder's live extraction
   api_key_created: string | null // other systems can read the live extraction with the folder's key
+  mcp_enabled: boolean // Claude and Copilot Studio can ask about the live extraction with the folder's key
   document_count: number
 }
 
@@ -363,7 +364,7 @@ export const renameFolder = (id: string, name: string): Promise<Folder> => sendJ
 /** Only what is given is changed. Turning auto_extract on runs the folder's read documents at once (paid). */
 export const updateFolder = (
   id: string,
-  changes: { template_id?: string | null; auto_extract?: boolean },
+  changes: { template_id?: string | null; auto_extract?: boolean; mcp_enabled?: boolean },
 ): Promise<Folder> => sendJson(`/folders/${id}`, 'PATCH', changes)
 /** A new API key for the folder; the old one stops working. The key is only shown this once. */
 export const createApiKey = (folderId: string): Promise<{ key: string }> =>
