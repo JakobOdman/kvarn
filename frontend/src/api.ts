@@ -353,6 +353,23 @@ async function sendJson(url: string, method: string, body?: unknown) {
   return res.json()
 }
 
+/** The folder's MCP description; stale when the template or the read documents have changed since. */
+export interface McpDescription {
+  description: string | null
+  created: string | null
+  stale: boolean
+}
+
+export async function getMcpDescription(folderId: string): Promise<McpDescription> {
+  const res = await apiFetch(`/folders/${folderId}/mcp-description`)
+  if (!res.ok) throw new Error(await errorText(res))
+  return res.json()
+}
+
+/** The AI writes a new description from the template and the folder's tables (paid, one call). */
+export const createMcpDescription = (folderId: string): Promise<McpDescription> =>
+  sendJson(`/folders/${folderId}/mcp-description`, 'POST')
+
 export async function listFolders(): Promise<Folder[]> {
   const res = await apiFetch('/folders')
   if (!res.ok) throw new Error(await errorText(res))
@@ -364,7 +381,7 @@ export const renameFolder = (id: string, name: string): Promise<Folder> => sendJ
 /** Only what is given is changed. Turning auto_extract on runs the folder's read documents at once (paid). */
 export const updateFolder = (
   id: string,
-  changes: { template_id?: string | null; auto_extract?: boolean; mcp_enabled?: boolean },
+  changes: { template_id?: string | null; auto_extract?: boolean; mcp_enabled?: boolean; mcp_description?: string },
 ): Promise<Folder> => sendJson(`/folders/${id}`, 'PATCH', changes)
 /** A new API key for the folder; the old one stops working. The key is only shown this once. */
 export const createApiKey = (folderId: string): Promise<{ key: string }> =>
