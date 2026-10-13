@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from openpyxl import Workbook
 from pydantic import BaseModel, Field
 
-from api import db, jobs, limits, llm, storage
+from api import db, jobs, limits, llm, mcp, storage
 from api.auth import user_from_token
 from api.checks import run_checks
 from api.layout import layout_text
@@ -424,14 +424,19 @@ async def get_config(user: dict = Depends(current_user)):
 public = APIRouter()
 
 
-def live_tables(folder_id: str, request: Request) -> dict:
-    """The folder's live extraction, if the request has the folder's key in "Authorization: Bearer kvarn_...".
-    A wrong key and an unknown folder give the same 401."""
+def check_key(folder_id: str, request: Request):
+    """401 unless the request has the folder's key in "Authorization: Bearer kvarn_...". A wrong key and an unknown
+    folder look the same."""
     scheme, _, key = request.headers.get("authorization", "").partition(" ")
     stored = db.folder_api_key_hash(folder_id)
     given = hashlib.sha256(key.encode()).hexdigest()
     if scheme.lower() != "bearer" or not stored or not hmac.compare_digest(stored, given):
         raise HTTPException(401, "Fel eller saknad API-nyckel.")
+
+
+def live_tables(folder_id: str, request: Request) -> dict:
+    """The folder's live extraction, if the request has the folder's key."""
+    check_key(folder_id, request)
     extraction = db.get_live_extraction(folder_id)
     if extraction is None:
         raise HTTPException(404, "Samlingen har ingen aktuell tabell. Slå på Extrahera automatiskt i Kvarn.")
@@ -454,6 +459,22 @@ async def public_table(folder_id: str, table: str, request: Request):
         raise HTTPException(404, f"Tabellen {table} finns inte.")
     columns = ["dokument", *(f.name for f in found.fields), "sida"]
     return [{c: row.get(c) for c in columns} for row in extraction["tables"].get(table, [])]
+
+
+@public.post("/folders/{folder_id}/mcp")
+async def mcp_server(folder_id: str, request: Request):
+    """The folder's MCP server (api/mcp.py), with the folder's key, when MCP is turned on for the folder."""
+    check_key(folder_id, request)
+    folder = db.public_folder(folder_id)
+    if not folder["mcp_enabled"]:
+        raise HTTPException(404, "MCP är inte påslaget för samlingen.")
+    return mcp.handle(await request.body(), folder, lambda: db.get_live_extraction(folder_id))
+
+
+@public.get("/folders/{folder_id}/mcp")
+async def mcp_stream(folder_id: str):
+    """No server-sent events: everything is answered in the POST."""
+    return Response(status_code=405, headers={"Allow": "POST"})
 
 
 app.include_router(public, prefix="/api/public")
